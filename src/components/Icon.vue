@@ -25,6 +25,12 @@ const PATHS: Record<string, string> = {
   lock: 'M6 11h12v9H6z M8.5 11V7.5a3.5 3.5 0 0 1 7 0V11',
   monitor: 'M3 4h18v12H3z M9 20h6 M12 16v4',
   quote: 'M7.5 6C5.5 7 4.5 9 4.5 11.5V18h6v-6H7c0-2 .8-3.5 2.5-4.5z M16.5 6c-2 1-3 3-3 5.5V18h6v-6h-3.5c0-2 .8-3.5 2.5-4.5z',
+  chat: 'M4 5.5h16v10H9l-5 4z M8.5 10.5h.01 M12 10.5h.01 M15.5 10.5h.01',
+  mic: 'M12 4a3 3 0 0 1 3 3v4a3 3 0 0 1-6 0V7a3 3 0 0 1 3-3z M6 11a6 6 0 0 0 12 0 M12 17v4 M9 21h6',
+  image: 'M4 5h16v14H4z M4 15l5-5 4 4 3-3 4 4 M9.5 8.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0',
+  send: 'M4 12L20 4l-4 16-5-6z M20 4L11 14',
+  play: 'M8 5.5l10 6.5-10 6.5z',
+  x: 'M6 6l12 12 M18 6L6 18',
 }
 
 const svgPath = PATHS[props.name] ?? PATHS.check

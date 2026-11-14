@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { RouterView, useRoute, useRouter } from 'vue-router'
+import { onMounted, onBeforeUnmount, ref, watch } from 'vue'
+import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
 import { useDark, useToggle } from '@vueuse/core'
 import { useAuthStore } from '@/stores/auth'
 import { useClassStore } from '@/stores/class'
+import { useChatStore } from '@/stores/chat'
+import { useNotify } from '@/composables/useNotify'
 import Icon from '@/components/Icon.vue'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const store = useClassStore()
+const chat = useChatStore()
+const notify = useNotify()
 
 const isDark = useDark({ storageKey: 'ark-theme' })
 const toggleDark = useToggle(isDark)
@@ -18,10 +22,20 @@ const NAV = [
   { to: '/board', name: '大板', icon: 'board' },
   { to: '/attendance', name: '出勤', icon: 'attendance' },
   { to: '/homework', name: '作业', icon: 'homework' },
+  { to: '/messages', name: '消息', icon: 'chat', badge: true },
   { to: '/manage', name: '管理', icon: 'manage' },
 ]
 
 const switching = ref(false)
+
+// 收到消息：提示音 + 系统通知（页面在后台时）；弹层卡片由 chat.popup 驱动
+function onIncoming(m: { kind: string; body: string; sender_role: string }) {
+  notify.beep('incoming')
+  notify.showNotification(
+    m.sender_role === 'teacher' ? '老师来消息了' : '大板来消息了',
+    m.kind === 'text' ? m.body : m.kind === 'voice' ? '[语音消息]' : '[图片]',
+  )
+}
 
 async function switchClass(e: Event) {
   const id = Number((e.target as HTMLSelectElement).value)
@@ -35,13 +49,41 @@ async function switchClass(e: Event) {
 
 function logout() {
   auth.logout()
+  chat.reset()
   store.reset()
   router.replace('/login')
 }
 
-onMounted(() => {
-  if (!store.loaded) store.loadClasses().catch(() => {})
+// 班级就绪后建立消息实时连接；切换班级时重连
+watch(
+  () => store.current?.id,
+  (cid) => {
+    if (cid) chat.connect(cid, onIncoming)
+    else chat.reset()
+  },
+)
+
+onMounted(async () => {
+  if (!store.loaded) {
+    try {
+      await store.loadClasses()
+      if (store.current) chat.connect(store.current.id, onIncoming)
+    } catch {
+      /* 未登录等场景由路由守卫处理 */
+    }
+  }
 })
+
+// 消息板块打开时清除未读
+watch(
+  () => route.path,
+  (p) => {
+    if (p.startsWith('/messages')) chat.markAllRead()
+  },
+  { immediate: true },
+)
+
+onBeforeUnmount(() => chat.reset())
 </script>
 
 <template>
@@ -59,7 +101,10 @@ onMounted(() => {
           class="rail-item"
           :class="{ on: route.path.startsWith(item.to) }"
         >
-          <Icon :name="item.icon" :size="20" />
+          <span class="nav-icon-wrap">
+            <Icon :name="item.icon" :size="20" />
+            <b v-if="item.badge && chat.unread" class="badge">{{ chat.unread > 99 ? '99+' : chat.unread }}</b>
+          </span>
           <span>{{ item.name }}</span>
         </RouterLink>
       </nav>
@@ -114,10 +159,47 @@ onMounted(() => {
         class="mobile-item"
         :class="{ on: route.path.startsWith(item.to) }"
       >
-        <Icon :name="item.icon" :size="21" />
+        <span class="nav-icon-wrap">
+          <Icon :name="item.icon" :size="21" />
+          <b v-if="item.badge && chat.unread" class="badge mobile">{{ chat.unread > 99 ? '99+' : chat.unread }}</b>
+        </span>
         <span>{{ item.name }}</span>
       </RouterLink>
     </nav>
+
+    <!-- 收到消息弹层：一体机（学生）全屏卡片，教师右下角卡片 -->
+    <Teleport to="body">
+      <div
+        v-if="chat.popup"
+        class="msg-pop-overlay"
+        :class="{ fullscreen: auth.user?.role === 'student' }"
+        @click.self="chat.popup = null"
+      >
+        <div class="msg-pop glass-strong">
+          <div class="msg-pop-head">
+            <Icon name="chat" :size="16" />
+            {{ chat.popup.sender_role === 'teacher' ? '老师' : '值日生' }} 发来消息
+            <button class="gbtn icon close" @click="chat.popup = null"><Icon name="x" :size="15" /></button>
+          </div>
+          <div class="msg-pop-body">
+            <img
+              v-if="chat.popup.kind === 'image' && chat.popup.class_id"
+              :src="chat.mediaSrc(chat.popup)"
+              alt="图片消息"
+            />
+            <p v-else-if="chat.popup.kind === 'voice'" class="voice-hint">
+              [语音消息 {{ ((chat.popup.media_duration_ms ?? 0) / 1000).toFixed(0) }} 秒] —— 到「消息」板块收听
+            </p>
+            <p v-else>{{ chat.popup.body }}</p>
+          </div>
+          <div class="msg-pop-foot">
+            <button class="gbtn primary" @click="chat.popup = null; router.push('/messages')">
+              打开消息板块
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -125,6 +207,95 @@ onMounted(() => {
 .shell {
   display: flex;
   min-height: 100vh;
+}
+.nav-icon-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.badge {
+  position: absolute;
+  top: -6px;
+  right: -10px;
+  background: var(--absent);
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 999px;
+  font-style: normal;
+}
+.badge.mobile {
+  top: -4px;
+  right: -8px;
+}
+
+/* 消息弹层 */
+.msg-pop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 20px;
+  pointer-events: none;
+}
+.msg-pop-overlay.fullscreen {
+  align-items: center;
+  justify-content: center;
+  background: rgba(6, 10, 22, 0.45);
+  pointer-events: auto;
+}
+.msg-pop {
+  width: min(360px, 92vw);
+  pointer-events: auto;
+  animation: pop-in 0.25s ease;
+}
+.fullscreen .msg-pop {
+  width: min(560px, 94vw);
+}
+@keyframes pop-in {
+  from {
+    transform: translateY(12px) scale(0.97);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.msg-pop-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--primary);
+  margin-bottom: 8px;
+}
+.msg-pop-head .close {
+  margin-left: auto;
+}
+.msg-pop-body {
+  font-size: 15px;
+  line-height: 1.7;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.msg-pop-body img {
+  max-width: 100%;
+  max-height: 50vh;
+  border-radius: 10px;
+  display: block;
+}
+.voice-hint {
+  color: var(--muted);
+  margin: 0;
+}
+.msg-pop-foot {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
 }
 
 /* 侧栏 */

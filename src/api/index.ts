@@ -6,6 +6,32 @@ const TOKEN_KEY = 'ark-token'
  */
 export const API_BASE: string = import.meta.env.VITE_API_BASE ?? ''
 
+/** WebSocket 地址：https→wss / http→ws，同 API 域名 */
+export function wsUrl(path: string): string {
+  const base = API_BASE || location.origin
+  return base.replace(/^http/, 'ws') + path
+}
+
+/** 原始二进制上传（媒体消息用） */
+export async function upload<T = any>(
+  path: string,
+  body: ArrayBuffer | Uint8Array | Blob,
+): Promise<T> {
+  const headers: Record<string, string> = {}
+  const token = getToken()
+  if (token) headers.Authorization = `Bearer ${token}`
+  headers['Content-Type'] = 'application/octet-stream'
+  const res = await fetch(API_BASE + path, { method: 'POST', headers, body: body as any })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new ApiError(data.error ?? `上传失败（${res.status}）`, res.status)
+  return data as T
+}
+
+/** 拼接媒体取回地址（img/audio 标签用，token 走 query） */
+export function mediaUrl(classId: number, msgId: number): string {
+  return `${API_BASE}/api/classes/${classId}/messages/media/${msgId}?token=${getToken()}`
+}
+
 export function getToken(): string {
   return localStorage.getItem(TOKEN_KEY) ?? ''
 }
