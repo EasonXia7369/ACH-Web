@@ -1,0 +1,446 @@
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
+import { get, post, put } from '@/api'
+import { useAuthStore } from '@/stores/auth'
+import { useClassStore } from '@/stores/class'
+import StudentsManager from '@/components/StudentsManager.vue'
+import DutyBoard from '@/components/DutyBoard.vue'
+import AuditPanel from '@/components/AuditPanel.vue'
+import Icon from '@/components/Icon.vue'
+
+const auth = useAuthStore()
+const store = useClassStore()
+
+const isAdmin = computed(() => auth.user?.role === 'admin')
+const isStudent = computed(() => auth.user?.role === 'student')
+
+type Tab = 'students' | 'duty' | 'settings' | 'audit' | 'invites' | 'import'
+const tabs = computed<Array<{ key: Tab; label: string; icon: string }>>(() => {
+  const base: Array<{ key: Tab; label: string; icon: string }> = [
+    { key: 'students', label: '名单', icon: 'users' },
+    { key: 'duty', label: '值日表', icon: 'calendar' },
+    { key: 'settings', label: '班级设置', icon: 'settings' },
+    { key: 'audit', label: '修改日志', icon: 'clock' },
+  ]
+  if (isAdmin.value) {
+    base.push({ key: 'invites', label: '邀请码', icon: 'lock' })
+    base.push({ key: 'import', label: '数据导入', icon: 'download' })
+  }
+  return base
+})
+const tab = ref<Tab>('students')
+
+/* 班级设置 */
+const stuPass = ref('')
+const subjectsText = ref('')
+const toastMsg = ref('')
+
+/* 班级重命名 */
+const clsNameDraft = ref('')
+const clsGradeDraft = ref('')
+
+/* 修改我的密码 */
+const oldPass = ref('')
+const newPass = ref('')
+const newPass2 = ref('')
+
+/* 备份/恢复 */
+const restoreInput = ref<HTMLInputElement | null>(null)
+
+function initSettings() {
+  subjectsText.value = store.current?.subjects.join('、') ?? ''
+  stuPass.value = ''
+  clsNameDraft.value = store.current?.name ?? ''
+  clsGradeDraft.value = store.current?.grade ?? ''
+  oldPass.value = ''
+  newPass.value = ''
+  newPass2.value = ''
+}
+
+async function saveClassInfo() {
+  try {
+    await put(`/api/classes/${store.current!.id}`, {
+      name: clsNameDraft.value.trim(),
+      grade: clsGradeDraft.value.trim(),
+    })
+    if (store.current) {
+      store.current.name = clsNameDraft.value.trim()
+      store.current.grade = clsGradeDraft.value.trim()
+    }
+    await store.loadClasses()
+    toast('班级信息已保存')
+  } catch (e: any) {
+    toast(e.message)
+  }
+}
+
+async function changeMyPassword() {
+  if (newPass.value.length < 4) {
+    toast('新密码至少 4 位')
+    return
+  }
+  if (newPass.value !== newPass2.value) {
+    toast('两次新密码不一致')
+    return
+  }
+  try {
+    await post('/api/auth/password', { old: oldPass.value, new: newPass.value })
+    oldPass.value = ''
+    newPass.value = ''
+    newPass2.value = ''
+    toast('密码已修改')
+  } catch (e: any) {
+    toast(e.message)
+  }
+}
+
+async function downloadBackup() {
+  const cid = store.current!.id
+  const data = await get<any>(`/api/classes/${cid}/backup`)
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = `班级备份_${data.class.name}_${new Date().toISOString().slice(0, 10)}.json`
+  document.body.appendChild(a)
+  a.click()
+  setTimeout(() => {
+    URL.revokeObjectURL(a.href)
+    a.remove()
+  }, 3000)
+  toast('备份已下载')
+}
+
+async function onRestoreFile(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  try {
+    const json = JSON.parse(await file.text())
+    if (
+      !confirm(
+        `恢复将覆盖「${store.current?.name}」的全部名单、考勤、作业、日志数据（替换为备份内容），且不可撤销。确定继续？`,
+      )
+    ) {
+      return
+    }
+    const res = await put<any>(`/api/classes/${store.current!.id}/restore`, json)
+    toast(
+      `已恢复：学生 ${res.counts.students}、考勤 ${res.counts.attendance}、请假 ${res.counts.leaves}、作业 ${res.counts.homework_records}`,
+    )
+    await store.loadClasses()
+  } catch (err: any) {
+    toast(err.message)
+  } finally {
+    ;(e.target as HTMLInputElement).value = ''
+  }
+}
+
+async function saveStuPass() {
+  try {
+    await put(`/api/classes/${store.current!.id}/student-pass`, { password: stuPass.value })
+    toast('学生密码已保存')
+    stuPass.value = ''
+  } catch (e: any) {
+    toast(e.message)
+  }
+}
+
+async function clearStuPass() {
+  if (!confirm('清除学生密码后，一体机将无法解锁登记，确定吗？')) return
+  await put(`/api/classes/${store.current!.id}/student-pass`, { password: null })
+  toast('学生密码已清除')
+}
+
+async function saveSubjects() {
+  const subjects = subjectsText.value.split(/[,，、\s]+/).filter(Boolean)
+  try {
+    await put(`/api/classes/${store.current!.id}/subjects`, { subjects })
+    if (store.current) store.current.subjects = subjects
+    toast('科目已保存')
+  } catch (e: any) {
+    toast(e.message)
+  }
+}
+
+function toast(msg: string) {
+  toastMsg.value = msg
+  setTimeout(() => (toastMsg.value = ''), 2200)
+}
+
+/* 创建班级 */
+const showCreate = ref(false)
+const newName = ref('')
+const newGrade = ref('')
+const createError = ref('')
+
+async function createClass() {
+  createError.value = ''
+  if (!newName.value.trim()) return
+  try {
+    await post('/api/classes', { name: newName.value.trim(), grade: newGrade.value.trim() })
+    newName.value = ''
+    newGrade.value = ''
+    showCreate.value = false
+    await store.loadClasses()
+  } catch (e: any) {
+    createError.value = e.message
+  }
+}
+
+/* 邀请码（admin） */
+interface Invite {
+  code: string
+  role: string
+  used_at: string | null
+  expires_at: string
+  used_by_name: string | null
+}
+const invites = ref<Invite[]>([])
+const inviteRole = ref<'teacher' | 'admin'>('teacher')
+const createdInvite = ref<{ code: string; role: string } | null>(null)
+
+async function refreshInvites() {
+  invites.value = (await get<{ invites: Invite[] }>('/api/admin/invites')).invites
+}
+
+async function genInvite() {
+  const res = await post<{ code: string; role: string }>('/api/admin/invites', {
+    role: inviteRole.value,
+    days: 30,
+  })
+  createdInvite.value = res
+  await refreshInvites()
+}
+
+/* 数据导入（admin） */
+const fileInput = ref<HTMLInputElement | null>(null)
+const importResult = ref('')
+const importError = ref('')
+
+async function onFile(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  importResult.value = ''
+  importError.value = ''
+  try {
+    const res = await post<any>('/api/admin/import-legacy', JSON.parse(await file.text()))
+    importResult.value = `导入成功：${res.studentCount} 名学生，考勤 ${res.attendanceRows} 条，作业记录 ${res.hwRecordRows} 条，作业布置 ${res.hwTaskRows} 条，日志 ${res.logRows} 条`
+    await store.loadClasses()
+  } catch (e: any) {
+    importError.value = e.message
+  } finally {
+    ;(e.target as HTMLInputElement).value = ''
+  }
+}
+
+onMounted(() => {
+  initSettings()
+  if (isAdmin.value) refreshInvites()
+})
+</script>
+
+<template>
+  <!-- 无班级：先创建 -->
+  <div v-if="!store.current" class="glass pad empty-box">
+    <template v-if="store.loaded">
+      <h2>还没有班级</h2>
+      <p class="foot-note">先创建你的班级，然后在「名单」里添加学生。</p>
+      <button class="gbtn primary" @click="showCreate = true">＋ 创建班级</button>
+    </template>
+    <p v-else class="empty">加载中…</p>
+  </div>
+
+  <template v-else>
+    <div class="gseg manage-tabs">
+      <button
+        v-for="t in tabs"
+        :key="t.key"
+        :class="{ on: tab === t.key }"
+        @click="tab = t.key; initSettings()"
+      >
+        <Icon :name="t.icon" :size="14" />
+        {{ t.label }}
+      </button>
+    </div>
+
+    <StudentsManager v-if="tab === 'students'" />
+    <DutyBoard v-else-if="tab === 'duty'" :class-id="store.current.id" />
+
+    <div v-else-if="tab === 'settings'" class="glass pad">
+      <h3 class="sec-title">班级信息</h3>
+      <div class="row">
+        <input v-model="clsNameDraft" class="ginput" style="flex: 1" placeholder="班级名称" maxlength="20" />
+        <input v-model="clsGradeDraft" class="ginput" style="width: 120px" placeholder="年级" maxlength="10" />
+        <button class="gbtn primary" @click="saveClassInfo">保存</button>
+      </div>
+
+      <h3 class="sec-title" style="margin-top: 20px">学生密码（教室一体机登记用）</h3>
+      <div class="row">
+        <input
+          v-model="stuPass"
+          class="ginput"
+          style="flex: 1"
+          type="password"
+          placeholder="至少 4 位"
+          autocomplete="new-password"
+        />
+        <button class="gbtn primary" @click="saveStuPass">保存</button>
+      </div>
+      <button class="gmini danger" style="margin-top: 8px" @click="clearStuPass">清除学生密码</button>
+
+      <h3 class="sec-title" style="margin-top: 20px">作业科目（顿号/逗号分隔）</h3>
+      <textarea v-model="subjectsText" class="gtextarea" style="width: 100%" rows="3"></textarea>
+      <button class="gbtn primary" style="margin-top: 10px" @click="saveSubjects">保存科目</button>
+
+      <template v-if="!isStudent">
+        <h3 class="sec-title" style="margin-top: 20px">修改我的密码</h3>
+        <div class="row" style="flex-wrap: wrap">
+          <input v-model="oldPass" class="ginput" style="flex: 1; min-width: 120px" type="password" placeholder="原密码" autocomplete="current-password" />
+          <input v-model="newPass" class="ginput" style="flex: 1; min-width: 120px" type="password" placeholder="新密码（至少 4 位）" autocomplete="new-password" />
+          <input v-model="newPass2" class="ginput" style="flex: 1; min-width: 120px" type="password" placeholder="确认新密码" autocomplete="new-password" />
+          <button class="gbtn primary" @click="changeMyPassword">修改</button>
+        </div>
+      </template>
+
+      <h3 class="sec-title" style="margin-top: 20px">数据备份与恢复</h3>
+      <div class="row">
+        <button class="gbtn" @click="downloadBackup"><Icon name="download" :size="15" /> 下载备份 JSON</button>
+        <input ref="restoreInput" type="file" accept=".json" hidden @change="onRestoreFile" />
+        <button class="gbtn danger" @click="restoreInput?.click()"><Icon name="upload" :size="15" /> 从备份恢复…</button>
+      </div>
+      <p class="foot-note" style="margin: 8px 0 0">
+        备份包含本班全部名单、考勤、请假、作业、值日与日志；恢复会用备份内容覆盖当前班级数据，不可撤销。
+      </p>
+    </div>
+
+    <div v-else-if="tab === 'audit'">
+      <AuditPanel :class-id="store.current.id" />
+    </div>
+
+    <template v-else-if="tab === 'invites'">
+      <div class="glass pad">
+        <h3 class="sec-title">生成邀请码（30 天有效）</h3>
+        <div class="row">
+          <select v-model="inviteRole" class="gselect">
+            <option value="teacher">教师（班主任）</option>
+            <option value="admin">管理员</option>
+          </select>
+          <button class="gbtn primary" @click="genInvite">生成</button>
+        </div>
+        <p v-if="createdInvite" class="ok-text" style="margin: 10px 0 0">
+          新邀请码：<b class="code">{{ createdInvite.code }}</b>
+        </p>
+      </div>
+      <div class="glass pad" style="margin-top: 12px">
+        <h3 class="sec-title">邀请码记录</h3>
+        <div class="inv-list">
+          <div v-for="i in invites" :key="i.code" class="inv-row">
+            <b class="code">{{ i.code }}</b>
+            <span>{{ i.role === 'teacher' ? '教师' : '管理员' }}</span>
+            <span
+              :class="i.used_at ? 'used' : new Date(i.expires_at) < new Date() ? 'used' : 'ok-text'"
+            >
+              {{ i.used_at ? `已使用（${i.used_by_name}）` : new Date(i.expires_at) < new Date() ? '已过期' : '可用' }}
+            </span>
+            <span class="foot-note">{{ i.expires_at.slice(0, 10) }}</span>
+          </div>
+          <p v-if="!invites.length" class="empty">还没有生成过邀请码</p>
+        </div>
+      </div>
+    </template>
+
+    <template v-else-if="tab === 'import'">
+      <div class="glass pad">
+        <h3 class="sec-title">导入旧系统数据</h3>
+        <p class="foot-note" style="margin: 0 0 12px">
+          在浏览器打开项目里的 tools/export-legacy.html，输入旧系统的同步码导出 JSON，然后在这里导入。同一同步码只能导入一次。
+        </p>
+        <input ref="fileInput" type="file" accept=".json" hidden @change="onFile" />
+        <button class="gbtn" @click="fileInput?.click()">选择导出的 JSON 文件</button>
+        <p v-if="importResult" class="ok-text" style="margin: 10px 0 0">{{ importResult }}</p>
+        <p v-if="importError" class="err" style="margin: 10px 0 0">{{ importError }}</p>
+      </div>
+    </template>
+  </template>
+
+  <!-- 创建班级弹窗 -->
+  <Teleport to="body">
+    <div v-if="showCreate" class="gbackdrop" @click.self="showCreate = false">
+      <div class="gpop">
+        <h3 class="sec-title">创建班级</h3>
+        <label class="flabel">班级名称</label>
+        <input v-model="newName" class="ginput" style="width: 100%" placeholder="例如 高一(3)班" maxlength="20" />
+        <label class="flabel">年级（可选）</label>
+        <input v-model="newGrade" class="ginput" style="width: 100%" placeholder="例如 高一" maxlength="10" />
+        <p v-if="createError" class="err">{{ createError }}</p>
+        <div style="display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px">
+          <button class="gbtn" @click="showCreate = false">取消</button>
+          <button class="gbtn primary" @click="createClass">创建</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <div v-if="toastMsg" class="gtoast">{{ toastMsg }}</div>
+</template>
+
+<style scoped>
+.pad {
+  padding: 16px 18px;
+}
+.manage-tabs {
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.manage-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.row .gselect {
+  min-width: 140px;
+}
+.flabel {
+  display: block;
+  font-size: 12.5px;
+  color: var(--muted);
+  font-weight: 600;
+  margin: 10px 0 5px;
+}
+.gmini.danger {
+  color: var(--absent);
+}
+.code {
+  letter-spacing: 1.5px;
+  font-size: 15px;
+}
+.used {
+  color: var(--faint);
+}
+.inv-list {
+  display: flex;
+  flex-direction: column;
+}
+.inv-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 13px;
+}
+.empty-box {
+  text-align: center;
+  padding: 48px 16px;
+}
+.empty-box h2 {
+  margin: 0 0 6px;
+}
+.empty-box .foot-note {
+  margin: 0 0 16px;
+}
+</style>

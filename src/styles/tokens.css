@@ -1,0 +1,133 @@
+/*
+ * 班级中心设计令牌 —— 液态玻璃 / Fluent 亚克力
+ * 双主题：html.dark（深）与默认（浅），由 VueUse useDark 驱动（跟随系统 + 手动三态）。
+ * 视觉方案整体可调：改这里的令牌即可全局换肤。
+ */
+
+/* ---------- 深色主题 ---------- */
+:root.dark {
+  /* 壁纸：深夜极光 */
+  --wallpaper-base: #0a0e1a;
+  --wallpaper-blobs:
+    radial-gradient(42rem 42rem at 8% -10%, rgba(79, 110, 247, 0.22), transparent 60%),
+    radial-gradient(38rem 38rem at 100% 0%, rgba(124, 58, 237, 0.16), transparent 55%),
+    radial-gradient(46rem 46rem at 55% 115%, rgba(14, 165, 233, 0.14), transparent 60%),
+    radial-gradient(30rem 30rem at 90% 80%, rgba(16, 185, 129, 0.08), transparent 55%);
+
+  /* 玻璃面 */
+  --panel: rgba(21, 27, 43, 0.55);
+  --panel-strong: rgba(23, 30, 48, 0.82);
+  --field: rgba(255, 255, 255, 0.06);
+  --field-hover: rgba(255, 255, 255, 0.1);
+  --glass-blur: blur(20px) saturate(150%);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+
+  /* 线与描边 */
+  --line: rgba(255, 255, 255, 0.11);
+  --line-soft: rgba(255, 255, 255, 0.06);
+
+  /* 文字 */
+  --text: #e9edf7;
+  --muted: #9aa5bd;
+  --faint: #6d7890;
+
+  /* 主色 */
+  --primary: #7d97ff;
+  --primary-dark: #5f7bf5;
+  --primary-soft: rgba(125, 151, 255, 0.16);
+  --on-primary: #0b1130;
+
+  /* 状态语义色（暗底提亮） */
+  --present: #3fd9a3;
+  --present-bg: rgba(63, 217, 163, 0.14);
+  --leave: #f5b04a;
+  --leave-bg: rgba(245, 176, 74, 0.15);
+  --late: #7ea6ff;
+  --late-bg: rgba(126, 166, 255, 0.16);
+  --absent: #ff7a76;
+  --absent-bg: rgba(255, 122, 118, 0.15);
+  --violate: #c39bff;
+  --violate-bg: rgba(195, 155, 255, 0.15);
+
+  /* 阴影与圆角 */
+  --shadow: 0 10px 36px rgba(0, 0, 0, 0.42), 0 2px 8px rgba(0, 0, 0, 0.28);
+  --radius: 18px;
+  --radius-sm: 12px;
+
+  color-scheme: dark;
+}
+
+/* ---------- 浅色主题 ---------- */
+:root {
+  --wallpaper-base: #eef3fb;
+  --wallpaper-blobs:
+    radial-gradient(42rem 42rem at 8% -10%, rgba(99, 132, 255, 0.2), transparent 60%),
+    radial-gradient(38rem 38rem at 100% 0%, rgba(167, 139, 250, 0.16), transparent 55%),
+    radial-gradient(46rem 46rem at 55% 115%, rgba(56, 189, 248, 0.16), transparent 60%),
+    radial-gradient(30rem 30rem at 90% 80%, rgba(52, 211, 153, 0.12), transparent 55%);
+
+  --panel: rgba(255, 255, 255, 0.6);
+  --panel-strong: rgba(255, 255, 255, 0.88);
+  --field: rgba(255, 255, 255, 0.78);
+  --field-hover: rgba(255, 255, 255, 0.95);
+  --glass-blur: blur(20px) saturate(150%);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+
+  --line: rgba(31, 41, 61, 0.1);
+  --line-soft: rgba(31, 41, 61, 0.05);
+
+  --text: #1c2438;
+  --muted: #5d6779;
+  --faint: #8d96a9;
+
+  --primary: #3b5bdb;
+  --primary-dark: #2f49b2;
+  --primary-soft: rgba(59, 91, 219, 0.1);
+  --on-primary: #ffffff;
+
+  --present: #0f9d76;
+  --present-bg: rgba(15, 157, 118, 0.12);
+  --leave: #b45309;
+  --leave-bg: rgba(180, 83, 9, 0.12);
+  --late: #1d4ed8;
+  --late-bg: rgba(29, 78, 216, 0.1);
+  --absent: #c81e1e;
+  --absent-bg: rgba(200, 30, 30, 0.1);
+  --violate: #6d28d9;
+  --violate-bg: rgba(109, 40, 217, 0.1);
+
+  --shadow: 0 8px 28px rgba(31, 45, 80, 0.1), 0 1px 3px rgba(31, 45, 80, 0.08);
+  --radius: 18px;
+  --radius-sm: 12px;
+
+  color-scheme: light;
+}
+
+/* ---------- 基底 ---------- */
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--text);
+  font-family: 'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', -apple-system,
+    BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  background-color: var(--wallpaper-base);
+  background-image: var(--wallpaper-blobs);
+  background-attachment: fixed;
+}
+
+/* 数字（时钟/统计）用等宽数字与 Windows 内置的 Bahnschrift 风格 */
+.num {
+  font-family: Bahnschrift, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+}
+
+::selection {
+  background: var(--primary-soft);
+}
