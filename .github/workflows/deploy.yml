@@ -29,4 +29,4 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: 26d1e756e9375f14b9aaefc8d5cc6ed5
-          command: pages deploy dist --project-name ark-class-hub-web
+          command: pages deploy dist --project-name ach-web
