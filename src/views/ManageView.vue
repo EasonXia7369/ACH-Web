@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { get, post, put, del } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useClassStore } from '@/stores/class'
@@ -10,6 +11,7 @@ import AuditPanel from '@/components/AuditPanel.vue'
 import Icon from '@/components/Icon.vue'
 import QRCode from 'qrcode'
 
+const route = useRoute()
 const auth = useAuthStore()
 const store = useClassStore()
 
@@ -72,7 +74,7 @@ const tabs = computed<Array<{ key: Tab; label: string; icon: string }>>(() => {
   }
   return base
 })
-const tab = ref<Tab>('students')
+const tab = ref<Tab>((route.query.tab as Tab) ?? 'students')
 
 /* 班级设置 */
 const stuPass = ref('')

@@ -3,9 +3,10 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import dayjs from 'dayjs'
 import { useIntervalFn } from '@vueuse/core'
-import { get, put } from '@/api'
+import { get, post, put } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore } from '@/stores/chat'
+import QRCode from 'qrcode'
 
 import { useClassStore } from '@/stores/class'
 import { dk, STATUS_META } from '@/utils/dates'
@@ -182,7 +183,46 @@ async function saveTask() {
   await load()
 }
 
-// 学生：点科目卡 → 快速登记未交
+// 家长视图快捷入口
+  const showParent = ref(false)
+  const parentLink = ref('')
+  const parentQr = ref('')
+
+  async function openParent() {
+    if (!store.current) return
+    showParent.value = true
+    try {
+      const detail = await get('/api/classes/' + store.current.id)
+      const k = detail.class?.parent_key ?? detail.parent_key ?? null
+      if (k) {
+        parentLink.value = 'https://ach.macrostar.top/parent/' + k
+        parentQr.value = await QRCode.toDataURL(parentLink.value, { width: 320, margin: 2 })
+      } else {
+        parentLink.value = ''
+        parentQr.value = ''
+      }
+    } catch {
+      parentLink.value = ''
+    }
+  }
+
+  async function genParentHere() {
+    if (!store.current) return
+    const res = await post('/api/classes/' + store.current.id + '/parent-link', {})
+    parentLink.value = 'https://ach.macrostar.top/parent/' + res.key
+    parentQr.value = await QRCode.toDataURL(parentLink.value, { width: 320, margin: 2 })
+  }
+
+  async function copyParentHere() {
+    try {
+      await navigator.clipboard.writeText(parentLink.value)
+      toast('链接已复制')
+    } catch {
+      toast('复制失败，请手动选择')
+    }
+  }
+
+  // 学生：点科目卡 → 快速登记未交
 const missingMark = ref<{ subject: string; picked: Set<number> } | null>(null)
 function openMissing(subject: string) {
   missingMark.value = { subject, picked: new Set() }
@@ -339,6 +379,14 @@ onMounted(() => {
         <p v-else class="none">今天没有课程安排</p>
       </div>
 
+      <div class="glass parent-card">
+        <div class="sec-head">
+          <h2><Icon name="users" :size="17" /> 家长视图</h2>
+        </div>
+        <p class="foot-note" style="margin: 0 0 10px">脱敏后的作业/出勤只读页，链接发家长群即可。</p>
+        <button class="gbtn primary" style="width: 100%" @click="openParent">查看二维码与链接</button>
+      </div>
+
       <div class="glass duty-card">
         <div class="sec-head">
           <h2><Icon name="users" :size="17" /> 今日值日生</h2>
@@ -355,6 +403,24 @@ onMounted(() => {
       </div>
     </div>
   </div>
+
+  <!-- 家长视图二维码弹层 -->
+  <Teleport to="body">
+    <div v-if="showParent" class="gbackdrop" @click.self="showParent = false">
+      <div class="gpop" style="text-align: center">
+        <h3 class="sec-title" style="font-size: 16px">家长视图</h3>
+        <p class="foot-note" style="margin: 0 0 12px">家长扫码或打开链接，可查看脱敏后的作业与出勤（无需登录）。</p>
+        <img v-if="parentQr" :src="parentQr" alt="家长视图二维码" style="width: min(320px, 80vw); border-radius: 12px" />
+        <p v-else class="empty" style="padding: 20px 0">正在生成…</p>
+        <p v-if="parentLink" class="parent-link num">{{ parentLink }}</p>
+        <div class="pop-acts" style="display: flex; gap: 8px; justify-content: center; margin-top: 12px">
+          <button v-if="parentLink" class="gbtn" @click="copyParentHere">复制链接</button>
+          <button v-if="!parentLink" class="gbtn" @click="genParentHere">生成链接</button>
+          <button class="gbtn primary" @click="showParent = false">完成</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 
   <!-- 作业编辑器（老师/管理员） -->
   <Teleport to="body">
@@ -700,6 +766,19 @@ onMounted(() => {
   border-radius: 8px;
   font-weight: 600;
   font-size: 12px;
+}
+
+.parent-card {
+  padding: 18px 20px;
+}
+.parent-link {
+  font-size: 12.5px;
+  color: var(--muted);
+  word-break: break-all;
+  background: var(--field);
+  border-radius: 8px;
+  padding: 8px 10px;
+  margin: 10px 0 0;
 }
 
 /* 值日生 */
