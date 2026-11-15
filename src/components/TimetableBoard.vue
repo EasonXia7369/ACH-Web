@@ -17,6 +17,7 @@ const rows = ref<Array<{ period: number; subject: string; teacher: string }>>(
 const loading = ref(false)
 const saving = ref(false)
 const toastMsg = ref('')
+const loadError = ref('')
 
 function toast(msg: string) {
   toastMsg.value = msg
@@ -25,6 +26,7 @@ function toast(msg: string) {
 
 async function load() {
   loading.value = true
+  loadError.value = ''
   try {
     const res = await get<{ timetable: Array<{ weekday: number; period: number; subject: string; teacher: string }> }>(
       `/api/classes/${props.classId}/timetable`,
@@ -35,12 +37,15 @@ async function load() {
       const hit = day.find((r) => r.period === i + 1)
       return { period: i + 1, subject: hit?.subject ?? '', teacher: hit?.teacher ?? '' }
     })
+  } catch (e: any) {
+    loadError.value = e.message ?? '课表加载失败'
+    rows.value = Array.from({ length: 8 }, (_, i) => ({ period: i + 1, subject: '', teacher: '' }))
   } finally {
     loading.value = false
   }
 }
 
-watch([weekday, props.classId], load, { immediate: true })
+watch([weekday, () => props.classId], load, { immediate: true })
 
 async function save() {
   saving.value = true
@@ -80,6 +85,7 @@ const filledCount = computed(() => rows.value.filter((r) => r.subject.trim()).le
     </div>
 
     <div v-if="loading" class="empty">加载中…</div>
+    <div v-if="loadError" class="err" style="margin-bottom: 10px">{{ loadError }}（请确认后端已启动且迁移已应用）</div>
     <div v-else class="rows">
       <div v-for="(r, i) in rows" :key="r.period" class="row">
         <span class="period num">{{ r.period }}</span>
