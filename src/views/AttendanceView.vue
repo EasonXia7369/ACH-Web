@@ -7,12 +7,13 @@ import { dk } from '@/utils/dates'
 import AttendanceBoard from '@/components/AttendanceBoard.vue'
 import StatsBoard from '@/components/StatsBoard.vue'
 import LeavesBoard from '@/components/LeavesBoard.vue'
+import WeeklyReportBoard from '@/components/WeeklyReportBoard.vue'
 
 const auth = useAuthStore()
 const store = useClassStore()
 
 const isStudent = computed(() => auth.user?.role === 'student')
-const sub = ref<'daily' | 'stats' | 'leaves'>('daily')
+const sub = ref<'daily' | 'stats' | 'leaves' | 'report'>('daily')
 
 /* 学生：申请请假（老师审批后生效） */
 const showApply = ref(false)
@@ -57,6 +58,7 @@ async function submitApply() {
     <button :class="{ on: sub === 'daily' }" @click="sub = 'daily'">每日登记</button>
     <button :class="{ on: sub === 'stats' }" @click="sub = 'stats'">月度统计</button>
     <button :class="{ on: sub === 'leaves' }" @click="sub = 'leaves'">请假</button>
+    <button :class="{ on: sub === 'report' }" @click="sub = 'report'">周报</button>
   </div>
   <div v-else class="glass" style="padding: 12px 16px; margin-bottom: 12px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
     <div style="flex: 1; min-width: 200px">
@@ -68,7 +70,8 @@ async function submitApply() {
 
   <AttendanceBoard v-if="sub === 'daily'" :class-id="store.current!.id" />
   <StatsBoard v-else-if="sub === 'stats'" :class-id="store.current!.id" />
-  <LeavesBoard v-else :class-id="store.current!.id" />
+  <LeavesBoard v-else-if="sub === 'leaves'" :class-id="store.current!.id" />
+  <WeeklyReportBoard v-else :class-id="store.current!.id" />
 
   <!-- 学生请假申请 -->
   <Teleport to="body">

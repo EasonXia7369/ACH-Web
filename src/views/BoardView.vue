@@ -76,6 +76,7 @@ const today = dk()
 const tasks = ref<Array<{ day: string; subject: string; content: string }>>([])
 const attendance = ref<Array<{ student_id: number; slot: string; status: string; note: string }>>([])
 const duty = ref<Array<{ student_id: number; name: string; role: string }>>([])
+const periods = ref<Array<{ period: number; subject: string; teacher: string }>>([])
 
 const slot = computed(() => {
   const h = now.value.hour()
@@ -137,14 +138,16 @@ const hasExceptionNames = computed(
 async function load() {
   if (!store.current) return
   const cid = store.current.id
-  const [t, a, d] = await Promise.all([
+  const [t, a, d, tt] = await Promise.all([
     get<any>(`/api/classes/${cid}/hw-tasks?from=${today}&to=${today}`),
     get<any>(`/api/classes/${cid}/attendance?day=${today}`),
     get<any>(`/api/classes/${cid}/duty/today`),
+    get<any>(`/api/classes/${cid}/timetable/today`),
   ])
   tasks.value = t.tasks
   attendance.value = a.records
   duty.value = d.members
+  periods.value = tt.periods
 }
 
 watch(() => store.current?.id, load, { immediate: true })
@@ -320,6 +323,20 @@ onMounted(() => {
         <button v-else class="gbtn primary" style="width: 100%" @click="router.push('/attendance')">
           登记本时段考勤
         </button>
+      </div>
+
+      <div class="glass tt-card">
+        <div class="sec-head">
+          <h2><Icon name="calendar" :size="17" /> 今日课程</h2>
+        </div>
+        <div v-if="periods.length" class="tt-list">
+          <div v-for="p in periods" :key="p.period" class="tt-row">
+            <span class="tt-p num">{{ p.period }}</span>
+            <b>{{ p.subject }}</b>
+            <span v-if="p.teacher" class="foot-note">{{ p.teacher }}</span>
+          </div>
+        </div>
+        <p v-else class="none">今天没有课程安排</p>
       </div>
 
       <div class="glass duty-card">
@@ -640,6 +657,36 @@ onMounted(() => {
 .name-line > span {
   font-weight: 600;
   margin-right: 6px;
+}
+
+/* 今日课程 */
+.tt-card {
+  padding: 18px 20px;
+}
+.tt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tt-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13.5px;
+  padding: 6px 10px;
+  background: var(--field);
+  border-radius: 8px;
+}
+.tt-p {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  background: var(--primary-soft);
+  color: var(--primary);
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 12px;
 }
 
 /* 值日生 */

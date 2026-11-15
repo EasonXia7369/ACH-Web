@@ -3,6 +3,7 @@ import { computed, ref } from 'vue'
 import { get, post, put } from '@/api'
 import { useClassStore } from '@/stores/class'
 import { pinyinInitial, initialOf } from '@/utils/pinyin'
+import Icon from '@/components/Icon.vue'
 
 const store = useClassStore()
 
@@ -23,6 +24,11 @@ function toast(msg: string) {
   setTimeout(() => (toastMsg.value = ''), 2200)
 }
 
+async function refresh() {
+  const detail = await get<{ students: any[] }>(`/api/classes/${store.current!.id}`)
+  store.students = detail.students
+}
+
 async function add() {
   error.value = ''
   if (!newName.value.trim()) return
@@ -32,9 +38,7 @@ async function add() {
       { name: newName.value.trim(), pinyin_initial: pinyinInitial(newName.value) },
     )
     const sid = res.student.id
-    // 拉一次班级详情同步本地名单
-    const detail = await get<{ students: any[] }>(`/api/classes/${store.current!.id}`)
-    store.students = detail.students
+    await refresh()
     newName.value = ''
     toast(`已添加（学号 ${sid}）`)
   } catch (e: any) {
@@ -61,9 +65,143 @@ async function setActive(s: any, active: boolean) {
   await refresh()
 }
 
-async function refresh() {
-  const detail = await get<{ students: any[] }>(`/api/classes/${store.current!.id}`)
-  store.students = detail.students
+/* ---------- 批量导入 ---------- */
+const showImport = ref(false)
+const importMode = ref<'paste' | 'file'>('paste')
+const pasteText = ref('')
+const parsedNames = ref<string[]>([])
+const parseNote = ref('')
+const importing = ref(false)
+const importResult = ref<{ added: number; skipped: string[] } | null>(null)
+const fileInput = ref<HTMLInputElement | null>(null)
+
+/** 单行 → 姓名：去掉 "1." "3、" "12:" "5 " 等序号前缀与表格列，取最后一个非空段 */
+function lineToName(line: string): string {
+  let t = line.trim()
+  if (!t) return ''
+  t = t.replace(/^\s*\d+\s*[.、:：)\）\-—\t]+\s*/, '') // 序号前缀
+  const parts = t.split(/[\t,，]+/).map((x) => x.trim()).filter(Boolean)
+  // 有制表符/逗号分列时取最后一个像姓名的段（Excel 常见：学号\t姓名）
+  for (let i = parts.length - 1; i >= 0; i--) {
+    if (/^[\u4e00-\u9fa5a-zA-Z·]{2,4}$/.test(parts[i])) return parts[i]
+  }
+  return parts.length ? parts[parts.length - 1] : ''
+}
+
+function parseNames(text: string): { names: string[]; note: string } {
+  const lines = text.split(/\r?\n/)
+  const names: string[] = []
+  let dropped = 0
+  const seen = new Set<string>()
+  for (const line of lines) {
+    const name = lineToName(line)
+    if (!name) {
+      if (line.trim()) dropped++
+      continue
+    }
+    if (seen.has(name)) {
+      dropped++
+      continue
+    }
+    seen.add(name)
+    names.push(name)
+  }
+  const note = dropped ? `已忽略 ${dropped} 行（空行/重复/无法识别）` : ''
+  return { names, note }
+}
+
+function onPasteInput() {
+  const { names, note } = parseNames(pasteText.value)
+  parsedNames.value = names
+  parseNote.value = note
+}
+
+async function onImportFile(e: Event) {
+  const file = (e.target as HTMLInputElement).files?.[0]
+  if (!file) return
+  parseNote.value = ''
+  try {
+    let text = ''
+    if (/\.csv$|\.txt$/i.test(file.name)) {
+      text = await file.text()
+      // 去 BOM
+      text = text.replace(/^\uFEFF/, '')
+    } else {
+      const ExcelJS = await import('exceljs')
+      const wb = new ExcelJS.Workbook()
+      await wb.xlsx.load(await file.arrayBuffer())
+      const ws = wb.worksheets[0]
+      // 找“姓名”表头列；找不到则取中文姓名值最多的列
+      let nameCol = 0
+      ws.eachRow({ includeEmpty: false }, (row, rn) => {
+        if (rn > 3) return
+        row.eachCell({ includeEmpty: false }, (cell, col) => {
+          if (typeof cell.value === 'string' && cell.value.includes('姓名')) nameCol = col
+        })
+      })
+      const colCount: Record<number, number> = {}
+      const colText: Record<number, number> = {}
+      ws.eachRow({ includeEmpty: false }, (row) => {
+        row.eachCell({ includeEmpty: false }, (cell, col) => {
+          const v = String(cell.value ?? '').trim()
+          if (/^[\u4e00-\u9fa5a-zA-Z·]{2,4}$/.test(v)) {
+            colCount[col] = (colCount[col] ?? 0) + 1
+            colText[col] = col
+          }
+        })
+      })
+      if (!nameCol) {
+        const best = Object.entries(colCount).sort((a, b) => b[1] - a[1])[0]
+        nameCol = best ? Number(best[0]) : 0
+      }
+      if (!nameCol) {
+        parseNote.value = '表格里没找到姓名列'
+        ;(e.target as HTMLInputElement).value = ''
+        return
+      }
+      const lines: string[] = []
+      ws.eachRow({ includeEmpty: false }, (row) => {
+        const v = String(row.getCell(nameCol).value ?? '').trim()
+        if (v && v !== '姓名') lines.push(v)
+      })
+      text = lines.join('\n')
+    }
+    pasteText.value = text
+    importMode.value = 'paste'
+    onPasteInput()
+  } catch (err: any) {
+    parseNote.value = '文件解析失败：' + (err.message ?? '未知错误')
+  } finally {
+    ;(e.target as HTMLInputElement).value = ''
+  }
+}
+
+async function confirmImport() {
+  if (!parsedNames.value.length) return
+  importing.value = true
+  error.value = ''
+  try {
+    const res = await post<{ added: number; skipped: string[] }>(
+      `/api/classes/${store.current!.id}/students/bulk`,
+      {
+        students: parsedNames.value.map((n) => ({ name: n, pinyin_initial: pinyinInitial(n) })),
+      },
+    )
+    await refresh()
+    showImport.value = false
+    pasteText.value = ''
+    parsedNames.value = []
+    importResult.value = { added: res.added, skipped: res.skipped }
+    if (res.skipped.length) {
+      toast(`导入完成：新增 ${res.added} 人，跳过重复 ${res.skipped.length} 人`)
+    } else {
+      toast(`导入完成：新增 ${res.added} 人`)
+    }
+  } catch (e: any) {
+    error.value = e.message
+  } finally {
+    importing.value = false
+  }
 }
 </script>
 
@@ -78,6 +216,9 @@ async function refresh() {
         maxlength="20"
         @keyup.enter="add"
       />
+      <button class="gbtn" @click="showImport = true; parsedNames = []; pasteText = ''; importResult = null">
+        <Icon name="upload" :size="15" /> 批量导入
+      </button>
       <button class="gbtn primary" @click="add">添加</button>
     </div>
     <p v-if="error" class="err" style="margin: 8px 0 0">{{ error }}</p>
@@ -85,6 +226,9 @@ async function refresh() {
       <input v-model="q" class="ginput" style="flex: 1" type="search" placeholder="搜名单" />
       <span class="foot-note">在册 {{ store.students.filter((s) => s.active).length }} 人 · 停用 {{ inactive.length }} 人</span>
     </div>
+    <p v-if="importResult" class="ok-text" style="margin: 8px 2px 0">
+      上次导入：新增 {{ importResult.added }} 人<template v-if="importResult.skipped.length">，跳过重复：{{ importResult.skipped.join('、') }}</template>
+    </p>
   </div>
 
   <div class="glass pad" style="margin-top: 12px">
@@ -110,6 +254,58 @@ async function refresh() {
       停用不是删除：历史考勤与作业记录保留，名单里不再显示；转学/退班用停用。
     </p>
   </div>
+
+  <!-- 批量导入弹窗 -->
+  <Teleport to="body">
+    <div v-if="showImport" class="gbackdrop" @click.self="showImport = false">
+      <div class="gpop" style="width: min(560px, 94vw)">
+        <h3 class="sec-title">批量导入名单</h3>
+
+        <div class="mode-row">
+          <button class="gmini" :class="{ on: importMode === 'paste' }" @click="importMode = 'paste'">
+            粘贴文本
+          </button>
+          <button class="gmini" :class="{ on: importMode === 'file' }" @click="importMode = 'file'; fileInput?.click()">
+            Excel / CSV 文件
+          </button>
+          <input ref="fileInput" type="file" accept=".xlsx,.csv,.txt" hidden @change="onImportFile" />
+        </div>
+
+        <p v-if="importMode === 'paste'" class="foot-note" style="margin: 8px 0 6px">
+          每行一个姓名（支持直接从 Excel 复制粘贴，自动忽略序号和学号列）。
+        </p>
+        <textarea
+          v-if="importMode === 'paste'"
+          v-model="pasteText"
+          class="gtextarea"
+          style="width: 100%; min-height: 160px"
+          placeholder="例如：&#10;1. 张三&#10;2. 李四&#10;王五"
+          @input="onPasteInput"
+        ></textarea>
+
+        <p v-if="parseNote" class="foot-note" style="margin: 6px 0 0">{{ parseNote }}</p>
+
+        <div v-if="parsedNames.length" class="preview">
+          <span class="foot-note">识别到 <b>{{ parsedNames.length }}</b> 个姓名：</span>
+          <div class="name-chips">
+            <span v-for="n in parsedNames" :key="n" class="name-chip">{{ n }}</span>
+          </div>
+        </div>
+
+        <div class="import-acts">
+          <button class="gbtn" @click="showImport = false">取消</button>
+          <button
+            class="gbtn primary"
+            :disabled="importing || !parsedNames.length"
+            @click="confirmImport"
+          >
+            <Icon name="download" :size="15" />
+            导入 {{ parsedNames.length || '' }} 人
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 
   <div v-if="toastMsg" class="gtoast">{{ toastMsg }}</div>
 </template>
@@ -171,5 +367,40 @@ async function refresh() {
 }
 .gmini.danger {
   color: var(--absent);
+}
+.mode-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.mode-row .gmini.on {
+  background: var(--primary-soft);
+  color: var(--primary);
+  border-color: var(--primary);
+}
+.preview {
+  margin-top: 12px;
+}
+.name-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+.name-chip {
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+}
+.import-acts {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 </style>

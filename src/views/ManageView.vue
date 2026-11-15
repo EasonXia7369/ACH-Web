@@ -4,6 +4,7 @@ import { get, post, put } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useClassStore } from '@/stores/class'
 import StudentsManager from '@/components/StudentsManager.vue'
+import TimetableBoard from '@/components/TimetableBoard.vue'
 import DutyBoard from '@/components/DutyBoard.vue'
 import AuditPanel from '@/components/AuditPanel.vue'
 import Icon from '@/components/Icon.vue'
@@ -14,15 +15,17 @@ const store = useClassStore()
 const isAdmin = computed(() => auth.user?.role === 'admin')
 const isStudent = computed(() => auth.user?.role === 'student')
 
-type Tab = 'students' | 'duty' | 'settings' | 'audit' | 'invites' | 'import'
+type Tab = 'students' | 'timetable' | 'duty' | 'settings' | 'audit' | 'accounts' | 'invites' | 'import'
 const tabs = computed<Array<{ key: Tab; label: string; icon: string }>>(() => {
   const base: Array<{ key: Tab; label: string; icon: string }> = [
     { key: 'students', label: '名单', icon: 'users' },
+    { key: 'timetable', label: '课程表', icon: 'calendar' },
     { key: 'duty', label: '值日表', icon: 'calendar' },
     { key: 'settings', label: '班级设置', icon: 'settings' },
     { key: 'audit', label: '修改日志', icon: 'clock' },
   ]
   if (isAdmin.value) {
+    base.push({ key: 'accounts', label: '账号', icon: 'users' })
     base.push({ key: 'invites', label: '邀请码', icon: 'lock' })
     base.push({ key: 'import', label: '数据导入', icon: 'download' })
   }
@@ -232,9 +235,51 @@ async function onFile(e: Event) {
   }
 }
 
+/* 账号管理（admin）：列表 / 重置密码 / 班级转让 */
+interface AdminUser {
+  id: number
+  name: string
+  role: string
+  class_count: number
+}
+const adminUsers = ref<AdminUser[]>([])
+const resetTarget = ref<AdminUser | null>(null)
+const resetPw = ref('')
+
+async function refreshAdminUsers() {
+  adminUsers.value = (await get<{ users: AdminUser[] }>('/api/admin/users')).users
+}
+
+async function resetPassword() {
+  if (!resetTarget.value) return
+  if (resetPw.value.length < 4) {
+    toast('密码至少 4 位')
+    return
+  }
+  await post('/api/admin/users/' + resetTarget.value.id + '/reset-password', { password: resetPw.value })
+  toast('已重置 ' + resetTarget.value.name + ' 的密码')
+  resetTarget.value = null
+  resetPw.value = ''
+}
+
+const transferClass = ref<{ id: number; name: string } | null>(null)
+const transferTo = ref<number | null>(null)
+
+async function doTransfer() {
+  if (!transferClass.value || !transferTo.value) return
+  await post('/api/admin/classes/' + transferClass.value.id + '/transfer', { teacher_id: transferTo.value })
+  toast('班级已转让')
+  transferClass.value = null
+  transferTo.value = null
+  await store.loadClasses()
+}
+
 onMounted(() => {
   initSettings()
-  if (isAdmin.value) refreshInvites()
+  if (isAdmin.value) {
+    refreshInvites()
+    refreshAdminUsers()
+  }
 })
 </script>
 
@@ -315,6 +360,48 @@ onMounted(() => {
     <div v-else-if="tab === 'audit'">
       <AuditPanel :class-id="store.current.id" />
     </div>
+
+    <template v-else-if="tab === 'accounts'">
+      <div class="glass pad">
+        <h3 class="sec-title">账号列表</h3>
+        <p class="foot-note" style="margin: 0 0 10px">重置密码后该账号所有会话立即下线，需要用新密码重新登录。</p>
+        <div class="acct-list">
+          <div v-for="u in adminUsers" :key="u.id" class="acct-row">
+            <b>{{ u.name }}</b>
+            <span class="role-tag">{{ u.role === 'admin' ? '管理员' : '教师' }}</span>
+            <span class="foot-note">{{ u.class_count }} 个班</span>
+            <button class="gmini" @click="resetTarget = u; resetPw = ''">重置密码</button>
+          </div>
+        </div>
+        <div v-if="resetTarget" class="reset-box">
+          <span>为 <b>{{ resetTarget.name }}</b> 设置新密码：</span>
+          <input v-model="resetPw" class="ginput" style="width: 180px" type="password" placeholder="至少 4 位" />
+          <button class="gbtn primary" @click="resetPassword">确认重置</button>
+          <button class="gmini" @click="resetTarget = null">取消</button>
+        </div>
+      </div>
+
+      <div class="glass pad" style="margin-top: 12px">
+        <h3 class="sec-title">班级转让</h3>
+        <p class="foot-note" style="margin: 0 0 10px">把班级的班主任改另一位教师（原班主任失去该班管理权）。</p>
+        <div v-for="c in store.classes" :key="c.id" class="acct-row">
+          <b>{{ c.name }}</b>
+          <span class="foot-note">现任：{{ c.teacher_name }}</span>
+          <button class="gmini" @click="transferClass = { id: c.id, name: c.name }; transferTo = null">转让</button>
+        </div>
+        <div v-if="transferClass" class="reset-box">
+          <span>「{{ transferClass.name }}」转让给：</span>
+          <select v-model.number="transferTo" class="gselect" style="width: 160px">
+            <option :value="null" disabled>选择教师</option>
+            <option v-for="u in adminUsers.filter((x) => x.role === 'teacher')" :key="u.id" :value="u.id">
+              {{ u.name }}
+            </option>
+          </select>
+          <button class="gbtn primary" @click="doTransfer">确认转让</button>
+          <button class="gmini" @click="transferClass = null">取消</button>
+        </div>
+      </div>
+    </template>
 
     <template v-else-if="tab === 'invites'">
       <div class="glass pad">
@@ -442,5 +529,37 @@ onMounted(() => {
 }
 .empty-box .foot-note {
   margin: 0 0 16px;
+}
+.acct-list {
+  display: flex;
+  flex-direction: column;
+}
+.acct-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 2px;
+  border-bottom: 1px solid var(--line-soft);
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+.role-tag {
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--primary);
+  background: var(--primary-soft);
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.reset-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--field);
+  border-radius: 10px;
+  font-size: 13px;
+  flex-wrap: wrap;
 }
 </style>
