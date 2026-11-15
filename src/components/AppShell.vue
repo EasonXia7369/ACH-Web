@@ -7,6 +7,7 @@ import { useClassStore } from '@/stores/class'
 import { useChatStore } from '@/stores/chat'
 import { useNotify } from '@/composables/useNotify'
 import Icon from '@/components/Icon.vue'
+import BrandLogo from '@/components/BrandLogo.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -91,7 +92,7 @@ onBeforeUnmount(() => chat.reset())
     <!-- 桌面侧栏 -->
     <aside class="rail glass">
       <div class="rail-logo" title="班级中心">
-        <Icon name="check" :size="20" />
+        <BrandLogo :size="26" />
       </div>
       <nav class="rail-nav">
         <RouterLink

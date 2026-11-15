@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import BrandLogo from '@/components/BrandLogo.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -42,7 +43,7 @@ async function submit() {
 <template>
   <main class="auth">
     <div class="box">
-      <div class="logo">✓</div>
+      <div class="logo"><BrandLogo :size="26" /></div>
       <h1>激活账号</h1>
       <p class="tip">输入学校管理员发放的邀请码，设置你的姓名和密码。</p>
       <label>邀请码</label>

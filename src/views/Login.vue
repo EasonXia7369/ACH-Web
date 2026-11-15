@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import BrandLogo from '@/components/BrandLogo.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -28,7 +29,7 @@ async function submit() {
 <template>
   <main class="auth">
     <div class="box">
-      <div class="logo">✓</div>
+      <div class="logo"><BrandLogo :size="26" /></div>
       <h1>登录</h1>
       <p class="tip">教师或管理员账号登录。</p>
       <label>姓名</label>
