@@ -184,9 +184,12 @@ async function finalizeRecording() {
   recording.value = false
   recordStream?.getTracks().forEach((t) => t.stop())
   const duration = recordSeconds.value * 1000
-  const blob = new Blob(recordChunks, { type: mediaRecorder?.mimeType ?? 'audio/webm' })
+  // 先取快照再清引用（此前顺序颠倒导致永远不发）
+  const shouldSend = !!(mediaRecorder as any)?._shouldSend
+  const mimeType = (mediaRecorder?.mimeType ?? 'audio/webm').split(';')[0]
+  const blob = new Blob(recordChunks, { type: mimeType })
   mediaRecorder = null
-  if (!(mediaRecorder as any)?._shouldSend) return
+  if (!shouldSend) return
   if (!store.current) return
   if (blob.size === 0) {
     recordError.value = '录音为空'
@@ -198,7 +201,7 @@ async function finalizeRecording() {
   }
   error.value = ''
   try {
-    await chat.sendMedia(store.current.id, 'voice', blob, blob.type || 'audio/webm', Math.max(duration, 100))
+    await chat.sendMedia(store.current.id, 'voice', blob, mimeType, Math.max(duration, 100))
     notify.beep('sent')
     scrollToBottom()
   } catch (e: any) {
