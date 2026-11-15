@@ -9,6 +9,7 @@ export interface ChatMessage {
   sender_role: 'teacher' | 'student'
   sender_name?: string
   actor_student_id?: number | null
+  popup?: boolean
   kind: 'text' | 'image' | 'voice'
   body: string
   has_media: boolean
@@ -191,6 +192,10 @@ export const useChatStore = defineStore('chat', () => {
           refreshTick.value++
           return
         }
+        if (data.type === 'message-deleted') {
+          messages.value = messages.value.filter((x) => x.id !== data.id)
+          return
+        }
         if (data.type === 'message') {
           const m = data.message as ChatMessage
           if (!messages.value.some((x) => x.id === m.id)) {
@@ -198,7 +203,7 @@ export const useChatStore = defineStore('chat', () => {
             unread.value++
             markSeenId(cid, m.id)
             if (m.sender_role === 'teacher') {
-              popup.value = m
+              if (m.popup !== false) popup.value = m
               onIncoming?.(m)
             }
           }
@@ -224,11 +229,12 @@ export const useChatStore = defineStore('chat', () => {
     socket.onerror = () => socket.close()
   }
 
-  async function sendText(cid: number, body: string): Promise<{ queued: boolean }> {
+  async function sendText(cid: number, body: string, popup = true): Promise<{ queued: boolean }> {
     const identity = useIdentityStore()
     try {
       const res = await post<{ message: ChatMessage }>(`/api/classes/${cid}/messages`, {
         body,
+        popup,
         actor_student_id: identity.studentId ?? undefined,
       })
       if (!messages.value.some((m) => m.id === res.message.id)) messages.value.push(res.message)
@@ -247,10 +253,12 @@ export const useChatStore = defineStore('chat', () => {
     blob: Blob,
     mime: string,
     durationMs?: number,
+    popup = true,
   ): Promise<void> {
     const identity = useIdentityStore()
     const q = new URLSearchParams({ kind, mime })
     if (identity.studentId) q.set('actor', String(identity.studentId))
+    q.set('popup', popup ? '1' : '0')
     if (kind === 'voice' && durationMs) q.set('duration', String(durationMs))
     const res = await upload<{ message: ChatMessage }>(
       `/api/classes/${cid}/messages/upload?${q.toString()}`,
@@ -258,6 +266,12 @@ export const useChatStore = defineStore('chat', () => {
     )
     if (!messages.value.some((m) => m.id === res.message.id)) messages.value.push(res.message)
     markSeenId(cid, res.message.id)
+  }
+
+  async function deleteMessage(cid: number, msgId: number): Promise<void> {
+    const { del } = await import('@/api')
+    await del(`/api/classes/${cid}/messages/${msgId}`)
+    messages.value = messages.value.filter((x) => x.id !== msgId)
   }
 
   function markAllRead(): void {
@@ -293,6 +307,7 @@ export const useChatStore = defineStore('chat', () => {
     loadHistory,
     sendText,
     sendMedia,
+    deleteMessage,
     markAllRead,
     markSeenId,
     flushQueue,

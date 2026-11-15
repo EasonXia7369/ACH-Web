@@ -8,6 +8,7 @@ import TimetableBoard from '@/components/TimetableBoard.vue'
 import DutyBoard from '@/components/DutyBoard.vue'
 import AuditPanel from '@/components/AuditPanel.vue'
 import Icon from '@/components/Icon.vue'
+import QRCode from 'qrcode'
 
 const auth = useAuthStore()
 const store = useClassStore()
@@ -90,7 +91,69 @@ const newPass2 = ref('')
 /* 备份/恢复 */
 const restoreInput = ref<HTMLInputElement | null>(null)
 
-function initSettings() {
+/* 家长链接（班主任） */
+const parentKey = ref('')
+const parentLink = ref('')
+const parentQr = ref('')
+
+async function genParentLink() {
+  if (!store.current) return
+  try {
+    const res = await post<{ key: string }>('/api/classes/' + store.current.id + '/parent-link', {})
+    parentKey.value = res.key
+    parentLink.value = 'https://ach.macrostar.top/parent/' + res.key
+    parentQr.value = await QRCode.toDataURL(parentLink.value, { width: 320, margin: 2 })
+    toast('家长链接已生成')
+  } catch (e: any) {
+    toast(e.message)
+  }
+}
+
+async function copyParentLink() {
+  try {
+    await navigator.clipboard.writeText(parentLink.value)
+    toast('链接已复制')
+  } catch {
+    toast('复制失败，请手动选择链接')
+  }
+}
+
+async function refreshParentLink() {
+  if (!store.current) return
+  try {
+    const detail = await get<any>('/api/classes/' + store.current.id)
+    const k = detail.class?.parent_key ?? detail.parent_key ?? null
+    if (k) {
+      parentKey.value = k
+      parentLink.value = 'https://ach.macrostar.top/parent/' + k
+      parentQr.value = await QRCode.toDataURL(parentLink.value, { width: 320, margin: 2 })
+    } else {
+      parentKey.value = ''
+      parentLink.value = ''
+      parentQr.value = ''
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+const quickPhrasesText = ref('')
+
+async function saveQuickPhrases() {
+  const phrases = quickPhrasesText.value.split(/\r?\n/).map((x) => x.trim()).filter(Boolean)
+  if (phrases.length > 20) {
+    toast('最多 20 条')
+    return
+  }
+  try {
+    await put('/api/classes/' + store.current!.id + '/quick-phrases', { phrases })
+    toast('快捷短语已保存')
+  } catch (e: any) {
+    toast(e.message)
+  }
+}
+
+async function initSettings() {
   subjectsText.value = store.current?.subjects.join('、') ?? ''
   stuPass.value = ''
   clsNameDraft.value = store.current?.name ?? ''
@@ -98,6 +161,14 @@ function initSettings() {
   oldPass.value = ''
   newPass.value = ''
   newPass2.value = ''
+  if (store.current) {
+    try {
+      const qp = await get<{ phrases: string[] }>('/api/classes/' + store.current.id + '/quick-phrases')
+      quickPhrasesText.value = qp.phrases.join('\n')
+    } catch {
+      quickPhrasesText.value = ''
+    }
+  }
 }
 
 async function saveClassInfo() {
@@ -275,6 +346,26 @@ async function onFile(e: Event) {
   }
 }
 
+/* 创建教师账号（admin） */
+const newTName = ref('')
+const newTPass = ref('')
+
+async function createTeacher() {
+  if (!newTName.value.trim() || !newTPass.value) {
+    toast('姓名和密码必填')
+    return
+  }
+  try {
+    await post('/api/admin/users', { name: newTName.value.trim(), password: newTPass.value })
+    toast('教师账号「' + newTName.value.trim() + '」已创建，请将密码告知老师')
+    newTName.value = ''
+    newTPass.value = ''
+    await refreshAdminUsers()
+  } catch (e: any) {
+    toast(e.message)
+  }
+}
+
 /* 账号管理（admin）：列表 / 重置密码 / 班级转让 */
 interface AdminUser {
   id: number
@@ -320,6 +411,7 @@ onMounted(() => {
     refreshInvites()
     refreshAdminUsers()
   }
+  refreshParentLink()
 })
 </script>
 
@@ -390,6 +482,24 @@ onMounted(() => {
         <button class="gbtn" :disabled="!addTeacherId" @click="addTeacher">添加</button>
       </div>
 
+      <h3 class="sec-title" style="margin-top: 20px">家长视图（只读链接）</h3>
+      <p class="foot-note" style="margin: 0 0 8px">家长打开链接可查看脱敏后的今日作业/课程/出勤与本周汇总（学生姓名仅显示姓氏和拼音首字母）。聊天消息不对家长开放。</p>
+      <div v-if="parentQr" class="parent-box">
+        <img :src="parentQr" alt="家长视图二维码" class="parent-qr" />
+        <div style="flex: 1; min-width: 0">
+          <input class="ginput" style="width: 100%" readonly :value="parentLink" @focus="($event.target as HTMLInputElement).select()" />
+          <div style="display: flex; gap: 8px; margin-top: 8px">
+            <button class="gmini" @click="copyParentLink">复制链接</button>
+            <button class="gmini" @click="genParentLink">重新生成（旧链接失效）</button>
+          </div>
+        </div>
+      </div>
+      <button v-else class="gbtn" @click="genParentLink">生成家长链接与二维码</button>
+
+      <h3 class="sec-title" style="margin-top: 20px">快捷短语（一行一条，消息板块使用）</h3>
+      <textarea v-model="quickPhrasesText" class="gtextarea" style="width: 100%" rows="4" placeholder="作业收齐了&#10;请求老师来教室&#10;一切正常"></textarea>
+      <button class="gbtn" style="margin-top: 10px" @click="saveQuickPhrases">保存快捷短语</button>
+
       <h3 class="sec-title" style="margin-top: 20px">作业科目（顿号/逗号分隔）</h3>
       <textarea v-model="subjectsText" class="gtextarea" style="width: 100%" rows="3"></textarea>
       <button class="gbtn primary" style="margin-top: 10px" @click="saveSubjects">保存科目</button>
@@ -421,7 +531,13 @@ onMounted(() => {
 
     <template v-else-if="tab === 'accounts'">
       <div class="glass pad">
-        <h3 class="sec-title">账号列表</h3>
+        <h3 class="sec-title">创建教师账号（密码直接告知老师）</h3>
+        <div class="acct-row" style="border: none">
+          <input v-model="newTName" class="ginput" style="flex: 1; min-width: 140px" placeholder="教师姓名，如：李老师" maxlength="20" />
+          <input v-model="newTPass" class="ginput" style="width: 160px" type="password" placeholder="初始密码" />
+          <button class="gbtn primary" @click="createTeacher">创建</button>
+        </div>
+        <h3 class="sec-title" style="margin-top: 16px">账号列表</h3>
         <p class="foot-note" style="margin: 0 0 10px">重置密码后该账号所有会话立即下线，需要用新密码重新登录。</p>
         <div class="acct-list">
           <div v-for="u in adminUsers" :key="u.id" class="acct-row">

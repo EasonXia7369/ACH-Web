@@ -57,6 +57,31 @@ const violationText = computed(() => {
   return map
 })
 
+const customFrom = ref(dayjs().startOf('month').format('YYYY-MM-DD'))
+const customTo = ref(dayjs().format('YYYY-MM-DD'))
+const customData = ref<any>(null)
+
+async function loadCustom() {
+  customData.value = await get<any>(
+    `/api/classes/${props.classId}/report?from=${customFrom.value}&to=${customTo.value}`,
+  )
+}
+
+watch([customFrom, customTo, props.classId], loadCustom, { immediate: true })
+
+async function doExportRange() {
+  if (!customData.value) return
+  const r = customData.value
+  const statsRows = r.stats.map((s: any, i: number) => [i + 1, s.name, s.leave, s.late, s.absent, s.violate, s.total, violationText.value.get(s.id) ?? ''])
+  const detailRows = r.details.map((d: any) => [d.day, weekdayCn(d.day), d.name, SLOT_LABEL[d.slot], ({ present: '出勤', leave: '请假', late: '迟到', absent: '旷课', violate: '违纪' } as any)[d.status], d.note || ''])
+  const vioRows = r.violations.map((v: any) => [v.day, weekdayCn(v.day), v.name, SLOT_LABEL[v.slot], v.note || ''])
+  await exportXlsx(`考勤统计_${className.value}_${customFrom.value}至${customTo.value}.xlsx`, [
+    { name: '考勤汇总', header: ['序号', '姓名', '请假', '迟到', '旷课', '违纪', '合计', '异常情况'], rows: statsRows, widths: [6, 12, 8, 8, 8, 8, 8, 40], freeze: 1 },
+    { name: '每日明细', header: ['日期', '星期', '姓名', '时段', '状态', '备注'], rows: detailRows, widths: [12, 8, 12, 8, 10, 30], freeze: 1 },
+    { name: '异常记录', header: ['日期', '星期', '姓名', '时段', '说明'], rows: vioRows, widths: [12, 8, 12, 8, 40], freeze: 1 },
+  ])
+}
+
 async function doExport() {
   if (!data.value) return
   const statsRows = sortedStats.value.map((s: any, i: number) => [
@@ -118,6 +143,10 @@ async function doExport() {
       <button :class="{ on: mode === 'time' }" @click="mode = 'time'">按次</button>
     </div>
     <button class="mini" @click="doExport">导出本月</button>
+    <input v-model="customFrom" type="date" class="ginput" style="width: 130px" />
+    <span style="color: var(--faint)">至</span>
+    <input v-model="customTo" type="date" class="ginput" style="width: 130px" />
+    <button class="mini" :disabled="!customData" @click="doExportRange">导出区间</button>
   </div>
   <p v-if="data" class="foot-note" style="margin: 0 0 8px">
     统计区间：{{ data.range.from }} ～ {{ data.range.to }}（{{ mode === 'day' ? '按天：同一天同种状态只算 1 次' : '按次：每个时段各算 1 次' }}）

@@ -19,6 +19,13 @@ export const router = createRouter({
       meta: { public: true },
     },
     {
+      // 家长只读视图（脱敏）
+      path: '/parent/:key',
+      name: 'parent',
+      component: () => import('@/views/ParentView.vue'),
+      meta: { public: true },
+    },
+    {
       // 一体机入口：学生密码解锁 → 进入大板（学生身份）
       path: '/kiosk',
       name: 'kiosk',

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { get } from '@/api'
 import dayjs from 'dayjs'
 import { useAuthStore } from '@/stores/auth'
 import { useClassStore } from '@/stores/class'
@@ -13,6 +14,12 @@ const chat = useChatStore()
 const notify = useNotify()
 
 const QUICK_PHRASES = ['作业收齐了', '请求老师来教室', '收到，请指示', '一切正常', '请查看大板']
+const quickPhrases = ref<string[]>(QUICK_PHRASES)
+const popupOn = ref(localStorage.getItem('ark-popup-on') !== '0')
+function togglePopup() {
+  popupOn.value = !popupOn.value
+  localStorage.setItem('ark-popup-on', popupOn.value ? '1' : '0')
+}
 
 const isStudent = computed(() => auth.user?.role === 'student')
 const listEl = ref<HTMLElement | null>(null)
@@ -53,6 +60,14 @@ function onIncoming(m: ChatMessage) {
 
 onMounted(async () => {
   await notify.requestPermission().catch(() => {})
+  if (store.current) {
+    try {
+      const res = await get<{ phrases: string[] }>(`/api/classes/${store.current.id}/quick-phrases`)
+      if (res.phrases.length) quickPhrases.value = res.phrases
+    } catch {
+      /* 用默认 */
+    }
+  }
   if (store.current) {
     await chat.loadHistory(store.current.id).catch(() => {})
     chat.connect(store.current.id, onIncoming)
@@ -113,7 +128,7 @@ function pickImage() {
     error.value = ''
     try {
       const blob = await compressImage(file)
-      await chat.sendMedia(store.current.id, 'image', blob, blob.type || 'image/jpeg')
+      await chat.sendMedia(store.current.id, 'image', blob, blob.type || 'image/jpeg', undefined, popupOn.value)
       notify.beep('sent')
       scrollToBottom()
     } catch (e: any) {
@@ -206,7 +221,7 @@ async function finalizeRecording() {
   }
   error.value = ''
   try {
-    await chat.sendMedia(store.current.id, 'voice', blob, mimeType, Math.max(duration, 100))
+    await chat.sendMedia(store.current.id, 'voice', blob, mimeType, Math.max(duration, 100), popupOn.value)
     notify.beep('sent')
     scrollToBottom()
   } catch (e: any) {
@@ -218,6 +233,11 @@ const toastMsg = ref('')
 function toast(msg: string) {
   toastMsg.value = msg
   setTimeout(() => (toastMsg.value = ''), 2600)
+}
+const deletingId = ref<number | null>(null)
+async function deleteMsg(m: ChatMessage) {
+  if (!confirm('删除这条消息？')) return
+  await chat.deleteMessage(store.current!.id, m.id)
 }
 const playingId = ref<number | null>(null)
 function playVoice(m: ChatMessage) {
@@ -249,7 +269,15 @@ function playVoice(m: ChatMessage) {
         }"
       >
         <div class="bubble">
-          <div class="meta"><span>{{ m.sender_name ?? (m.sender_role === 'teacher' ? '老师' : '值日生') }}</span><span class="meta-time">{{ timeLabel(m.created_at) }}</span></div>
+          <div class="meta">
+            <span>{{ m.sender_name ?? (m.sender_role === 'teacher' ? '老师' : '值日生') }}</span>
+            <span class="meta-time">{{ timeLabel(m.created_at) }}</span>
+            <button
+              v-if="m.sender_role === 'teacher' ? !isStudent : true"
+              class="meta-del"
+              @click="deleteMsg(m)"
+            >删除</button>
+          </div>
           <template v-if="m.kind === 'text'">{{ m.body }}  <div v-if="toastMsg" class="gtoast">{{ toastMsg }}</div>
 </template>
           <template v-else-if="m.kind === 'image'">
@@ -269,11 +297,20 @@ function playVoice(m: ChatMessage) {
     </div>
 
     <div class="quickbar">
-      <button v-for="p in QUICK_PHRASES" :key="p" class="chip-btn" @click="sendQuick(p)">{{ p }}</button>
+      <button v-for="p in quickPhrases" :key="p" class="chip-btn" @click="sendQuick(p)">{{ p }}</button>
+      <span class="foot-note" style="margin-left: auto; flex: none">在「管理 → 班级设置」自定义</span>
     </div>
 
     <div class="inputbar">
       <template v-if="!isStudent">
+        <button
+          class="gbtn icon"
+          :class="{ 'popup-on': popupOn }"
+          :title="popupOn ? '发送后弹到大屏（点击关闭）' : '发送后不弹大屏（点击开启）'"
+          @click="togglePopup"
+        >
+          <Icon name="monitor" :size="18" />
+        </button>
         <button class="gbtn icon" title="发送图片" @click="pickImage"><Icon name="image" :size="18" /></button>
         <button
           class="gbtn icon"
@@ -394,6 +431,23 @@ function playVoice(m: ChatMessage) {
 }
 .meta-time {
   font-variant-numeric: tabular-nums;
+}
+.meta-del {
+  background: none;
+  border: none;
+  color: var(--faint);
+  font-size: 10px;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+}
+.meta-del:hover {
+  color: var(--absent);
+}
+.popup-on {
+  background: var(--primary-soft) !important;
+  color: var(--primary);
+  border-color: var(--primary);
 }
 .chat-img {
   max-width: min(320px, 100%);
