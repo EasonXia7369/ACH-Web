@@ -1,36 +1,92 @@
-/* 登录/激活等认证页共用样式 */
+/*
+ * 认证页共用样式 v2 —— 左右分栏（桌面）：品牌排版区 + 玻璃表单区
+ * 登录 / 激活共用；一体机门为独立居中卡片。
+ */
+
 .auth {
   min-height: 100vh;
   display: grid;
-  place-items: center;
-  padding: 16px;
+  grid-template-columns: 1.1fr 1fr;
 }
 
-.box {
-  width: 100%;
-  max-width: 360px;
+/* ---------- 品牌区 ---------- */
+.brand-pane {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 64px 12vh 64px 10vw;
+}
+
+.brand-logo-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 22px;
+}
+
+.brand-name {
+  margin: 0;
+  font-size: clamp(34px, 3.6vw, 46px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--text);
+}
+
+.brand-tag {
+  margin: 14px 0 0;
+  font-size: 16px;
+  color: var(--muted);
+  line-height: 1.9;
+}
+
+.brand-feats {
+  margin: 36px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.brand-feats li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+  color: var(--muted);
+}
+
+.brand-feats .feat-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: var(--primary-soft);
+  color: var(--primary);
+  flex: none;
+}
+
+/* ---------- 表单区 ---------- */
+.form-pane {
+  display: grid;
+  place-items: center;
+  padding: 40px 32px;
+}
+
+.form-box {
+  width: min(380px, 100%);
   background: var(--panel-strong);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 24px;
+  box-shadow: var(--shadow), var(--glass-inset);
+  padding: 30px 30px 26px;
 }
 
-.logo {
-  width: 44px;
-  height: 44px;
-  border-radius: 13px;
-  background: linear-gradient(135deg, #4f6ef7, #2f49b2);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  font-size: 21px;
-  margin-bottom: 12px;
-}
-
-h1 {
+.form-box h2 {
   margin: 0;
   font-size: 20px;
   font-weight: 600;
@@ -38,17 +94,17 @@ h1 {
 }
 
 .tip {
-  margin: 6px 0 16px;
-  font-size: 12.5px;
+  margin: 8px 0 18px;
+  font-size: 13px;
   color: var(--muted);
-  line-height: 1.6;
+  line-height: 1.7;
 }
 
 label {
   display: block;
   font-size: 12.5px;
   color: var(--muted);
-  margin: 12px 0 5px;
+  margin: 14px 0 5px;
   font-weight: 600;
 }
 
@@ -56,41 +112,61 @@ input {
   width: 100%;
   box-sizing: border-box;
   font-family: inherit;
-  font-size: 14px;
+  font-size: 15px;
   color: var(--text);
   border: 1px solid var(--line);
   background: var(--field);
-  padding: 10px 12px;
-  border-radius: 10px;
+  padding: 11px 12px;
+  border-radius: var(--radius-sm);
   outline: none;
+  transition:
+    border-color var(--dur-fast) var(--ease-spring),
+    background var(--dur-fast) var(--ease-spring),
+    box-shadow var(--dur-fast) var(--ease-spring);
 }
 
 input:focus {
-  border-color: #a9b8e8;
-  box-shadow: 0 0 0 3px rgba(59, 91, 219, 0.1);
+  border-color: var(--primary);
+  background: var(--field-hover);
+  box-shadow: 0 0 0 3px var(--primary-soft);
+}
+
+input::placeholder {
+  color: var(--faint);
 }
 
 .btn {
   font-family: inherit;
-  font-size: 14px;
+  font-size: 15px;
+  font-weight: 600;
   cursor: pointer;
   border: 1px solid var(--line);
   background: var(--field);
-  padding: 10px 14px;
-  border-radius: 10px;
-  font-weight: 600;
+  color: var(--text);
+  padding: 11px 14px;
+  border-radius: var(--radius-sm);
+  transition: transform var(--dur-fast) var(--ease-spring);
+}
+
+.btn:active {
+  transform: scale(0.97);
 }
 
 .btn.primary {
   background: var(--primary);
-  border-color: var(--primary);
-  color: #fff;
+  border-color: transparent;
+  color: var(--on-primary);
   width: 100%;
-  margin-top: 18px;
+  margin-top: 20px;
+}
+
+.btn.primary:hover {
+  background: var(--primary-dark);
 }
 
 .btn:disabled {
-  opacity: 0.6;
+  opacity: 0.55;
+  cursor: default;
 }
 
 .err {
@@ -100,8 +176,8 @@ input:focus {
 }
 
 .alt {
-  margin: 14px 0 0;
-  font-size: 12.5px;
+  margin: 18px 0 0;
+  font-size: 13px;
   color: var(--muted);
   text-align: center;
 }
@@ -109,4 +185,32 @@ input:focus {
 .alt a {
   color: var(--primary);
   text-decoration: none;
+  font-weight: 600;
+}
+
+.alt a:hover {
+  text-decoration: underline;
+}
+
+/* ---------- 移动端：上下堆叠 ---------- */
+@media (max-width: 860px) {
+  .auth {
+    grid-template-columns: 1fr;
+    padding: 32px 20px 48px;
+  }
+  .brand-pane {
+    padding: 0 4px 28px;
+  }
+  .brand-name {
+    font-size: 28px;
+  }
+  .brand-tag {
+    font-size: 14px;
+  }
+  .brand-feats {
+    display: none;
+  }
+  .form-pane {
+    padding: 0;
+  }
 }

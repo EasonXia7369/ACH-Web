@@ -42,24 +42,35 @@ async function submit() {
 
 <template>
   <main class="auth">
-    <div class="box">
-      <div class="logo"><BrandLogo :size="26" /></div>
-      <h1>激活账号</h1>
-      <p class="tip">输入学校管理员发放的邀请码，设置你的姓名和密码。</p>
-      <label>邀请码</label>
-      <input v-model="code" placeholder="8 位邀请码" autocomplete="off" @keyup.enter="submit" />
-      <label>姓名</label>
-      <input v-model="name" placeholder="如：张老师" maxlength="20" @keyup.enter="submit" />
-      <label>设置密码</label>
-      <input v-model="password" type="password" placeholder="至少 4 位" @keyup.enter="submit" />
-      <label>确认密码</label>
-      <input v-model="confirm" type="password" placeholder="再输一次" @keyup.enter="submit" />
-      <p v-if="error" class="err">{{ error }}</p>
-      <button class="btn primary" :disabled="busy" @click="submit">
-        {{ busy ? '激活中…' : '激活并进入' }}
-      </button>
-      <p class="alt">已有账号？<RouterLink to="/login">直接登录</RouterLink></p>
-    </div>
+    <!-- 品牌区 -->
+    <section class="brand-pane">
+      <div class="brand-logo-row">
+        <BrandLogo :size="56" />
+      </div>
+      <h1 class="brand-name">班级中心</h1>
+      <p class="brand-tag">输入邀请码，<br />一分钟开启你的班级日常。</p>
+    </section>
+
+    <!-- 表单区 -->
+    <section class="form-pane">
+      <div class="form-box">
+        <h2>激活账号</h2>
+        <p class="tip">输入学校管理员发放的邀请码，设置你的姓名和密码。</p>
+        <label>邀请码</label>
+        <input v-model="code" placeholder="8 位邀请码" autocomplete="off" @keyup.enter="submit" />
+        <label>姓名</label>
+        <input v-model="name" placeholder="如：张老师" maxlength="20" @keyup.enter="submit" />
+        <label>设置密码</label>
+        <input v-model="password" type="password" placeholder="至少 4 位" @keyup.enter="submit" />
+        <label>确认密码</label>
+        <input v-model="confirm" type="password" placeholder="再输一次" @keyup.enter="submit" />
+        <p v-if="error" class="err">{{ error }}</p>
+        <button class="btn primary" :disabled="busy" @click="submit">
+          {{ busy ? '激活中…' : '激活并进入' }}
+        </button>
+        <p class="alt">已有账号？<RouterLink to="/login">直接登录</RouterLink></p>
+      </div>
+    </section>
   </main>
 </template>
 
