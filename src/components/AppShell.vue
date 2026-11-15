@@ -168,6 +168,25 @@ onBeforeUnmount(() => chat.reset())
       </RouterLink>
     </nav>
 
+    <!-- 离线摘要：上线补拉后发现的离线新消息 -->
+    <Teleport to="body">
+      <div v-if="chat.offlineSummary && !chat.popup" class="offline-overlay" @click.self="chat.offlineSummary = null">
+        <div class="msg-pop glass-strong offline-pop">
+          <div class="msg-pop-head">
+            <Icon name="chat" :size="16" />
+            离线期间收到 {{ chat.offlineSummary.count }} 条新消息
+            <button class="gbtn icon close" @click="chat.offlineSummary = null"><Icon name="x" :size="15" /></button>
+          </div>
+          <div v-if="chat.offlineSummary.last" class="msg-pop-body">
+            <p>{{ chat.offlineSummary.last.sender_role === 'teacher' ? '老师' : '值日生' }}：{{ chat.offlineSummary.last.kind === 'text' ? chat.offlineSummary.last.body : '[媒体消息]' }}</p>
+          </div>
+          <div class="msg-pop-foot">
+            <button class="gbtn primary" @click="chat.offlineSummary = null; chat.markAllRead(); router.push('/messages')">查看消息</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- 收到消息弹层：一体机（学生）全屏卡片，教师右下角卡片 -->
     <Teleport to="body">
       <div
@@ -479,5 +498,19 @@ onBeforeUnmount(() => chat.reset())
   .content {
     padding: 12px 16px calc(72px + env(safe-area-inset-bottom));
   }
+}
+.offline-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 115;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-end;
+  padding: 20px;
+  pointer-events: none;
+}
+.offline-pop {
+  pointer-events: auto;
+  animation: pop-in var(--dur-med) var(--ease-spring);
 }
 </style>

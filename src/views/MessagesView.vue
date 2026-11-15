@@ -82,10 +82,15 @@ async function sendText() {
   error.value = ''
   sending.value = true
   try {
-    await chat.sendText(store.current.id, body)
+    const res = await chat.sendText(store.current.id, body)
     input.value = ''
-    notify.beep('sent')
-    scrollToBottom()
+    if (res.queued) {
+      notify.beep('sent')
+      toast('当前无法送达，已存入待发队列，恢复后自动发送')
+    } else {
+      notify.beep('sent')
+      scrollToBottom()
+    }
   } catch (e: any) {
     error.value = e.message
   } finally {
@@ -209,6 +214,11 @@ async function finalizeRecording() {
   }
 }
 
+const toastMsg = ref('')
+function toast(msg: string) {
+  toastMsg.value = msg
+  setTimeout(() => (toastMsg.value = ''), 2600)
+}
 const playingId = ref<number | null>(null)
 function playVoice(m: ChatMessage) {
   playingId.value = m.id
@@ -240,7 +250,8 @@ function playVoice(m: ChatMessage) {
       >
         <div class="bubble">
           <div class="meta"><span>{{ m.sender_role === 'teacher' ? '老师' : '值日生' }}</span><span class="meta-time">{{ timeLabel(m.created_at) }}</span></div>
-          <template v-if="m.kind === 'text'">{{ m.body }}</template>
+          <template v-if="m.kind === 'text'">{{ m.body }}  <div v-if="toastMsg" class="gtoast">{{ toastMsg }}</div>
+</template>
           <template v-else-if="m.kind === 'image'">
             <img :src="chat.mediaSrc(m)" class="chat-img" loading="lazy" @click="previewImage = chat.mediaSrc(m)" />
           </template>
