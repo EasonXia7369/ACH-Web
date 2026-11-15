@@ -228,9 +228,7 @@ function loadTask(t: any) {
 <template>
   <div class="subbar">
     <button :class="{ on: sub === 'miss' }" @click="sub = 'miss'">作业未交</button>
-    <button :class="{ on: sub === 'task' }" @click="sub = 'task'">
-      {{ isStudent ? '当日作业' : '作业布置' }}
-    </button>
+    <button :class="{ on: sub === 'task' }" @click="sub = 'task'">作业布置</button>
   </div>
 
   <!-- ======== 作业未交 ======== -->
@@ -323,8 +321,8 @@ function loadTask(t: any) {
   <!-- ======== 作业布置（学生为只读视图） ======== -->
   <template v-else>
     <div class="card toolbar">
-      <input v-model="taskDay" type="date" :disabled="isStudent" />
-      <button v-if="!isStudent" class="mini" @click="taskDay = dk()">今天</button>
+      <input v-model="taskDay" type="date" />
+      <button class="mini" @click="taskDay = dk()">今天</button>
     </div>
 
     <div class="card pad">
@@ -340,16 +338,15 @@ function loadTask(t: any) {
       </div>
       <textarea
         v-model="taskContent"
-        :disabled="isStudent"
-        :placeholder="isStudent ? '选择科目查看当天作业内容…' : '选择科目，填写当天作业内容，如：《练习册》P32 第1-8题…'"
+        placeholder="选择科目，填写当天作业内容，如：《练习册》P32 第1-8题…"
         maxlength="300"
       ></textarea>
-      <div v-if="!isStudent" class="task-acts">
+      <div class="task-acts">
         <button class="btn primary" style="flex: 1" @click="saveTask">保存本科目作业</button>
         <button class="mini danger" @click="taskContent = ''; saveTask()">清空本科目</button>
       </div>
     </div>
-    <p v-if="!isStudent" class="foot-note">按日期 × 科目保存；内容清空后保存即删除该科作业。</p>
+    <p class="foot-note">按日期 × 科目保存；内容清空后保存即删除该科作业。值日生可代老师布置，操作记为「学生」。</p>
 
     <div class="card" style="margin-top: 12px">
       <div class="pad">

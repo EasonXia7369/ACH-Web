@@ -149,8 +149,24 @@ watch(() => store.current?.id, load, { immediate: true })
 /* ---------- 作业卡片墙 ---------- */
 const taskOf = (subject: string) => tasks.value.find((t) => t.subject === subject)
 
-// 编辑器（老师/管理员）
-const editor = ref<{ subject: string; content: string; isNew: boolean } | null>(null)
+  // 大卡只展示有内容的科目；空科目仅老师视图可见（布置入口）
+  const filledTasks = computed(() =>
+    (store.current?.subjects ?? [])
+      .map((s) => taskOf(s))
+      .filter((t): t is NonNullable<typeof t> => !!t),
+  )
+  const emptySubjects = computed(() => (store.current?.subjects ?? []).filter((s) => !taskOf(s)))
+
+// 大卡查看（全屏放大）
+  const viewer = ref<{ subject: string; content: string } | null>(null)
+  function openViewer(subject: string) {
+    const t = taskOf(subject)
+    if (!t) return
+    viewer.value = { subject, content: t.content }
+  }
+
+  // 编辑器（老师/值日生均可）
+  const editor = ref<{ subject: string; content: string; isNew: boolean } | null>(null)
 function openEditor(subject: string) {
   const t = taskOf(subject)
   editor.value = { subject, content: t?.content ?? '', isNew: !t }
@@ -191,7 +207,8 @@ async function saveMissing() {
 }
 
 function openSubjectCard(subject: string) {
-  if (isStudent.value) openMissing(subject)
+  const t = taskOf(subject)
+  if (t) openViewer(subject)
   else openEditor(subject)
 }
 
@@ -232,7 +249,7 @@ onMounted(() => {
       <div class="glass wall-card">
         <div class="sec-head">
           <h2><Icon name="homework" :size="17" /> 今日作业</h2>
-          <span class="hint">{{ isStudent ? '点科目卡登记未交名单' : '点卡片布置作业' }}</span>
+          <span class="hint">{{ isStudent ? '点卡片查看；弹窗内可布置、登记未交' : '点空卡布置，点卡片查看放大' }}</span>
         </div>
         <div class="wall">
           <button
@@ -324,6 +341,21 @@ onMounted(() => {
       </div>
     </div>
   </div>
+
+  <!-- 作业全屏放大（后排可读） -->
+  <Teleport to="body">
+    <div v-if="viewer" class="gbackdrop" @click.self="viewer = null">
+      <div class="gpop viewer-pop">
+        <h3 class="viewer-title">{{ viewer.subject }} · 今日作业</h3>
+        <p class="viewer-content">{{ viewer.content }}</p>
+        <div class="viewer-acts">
+          <button class="gbtn" @click="openMissing(viewer.subject); viewer = null">登记未交</button>
+          <button class="gbtn" @click="openEditor(viewer.subject); viewer = null">编辑</button>
+          <button class="gbtn primary" @click="viewer = null">关闭</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 
   <!-- 作业编辑器（老师/管理员） -->
   <Teleport to="body">
@@ -490,6 +522,48 @@ onMounted(() => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   gap: 12px;
+}
+.subject-card.big {
+  min-height: 0;
+  padding: 16px 18px;
+}
+.subject-card.big .subject-content.big {
+  font-size: 16px;
+  line-height: 1.8;
+  color: var(--text);
+  white-space: pre-wrap;
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+.expand-icon {
+  color: var(--faint);
+  margin-left: 4px;
+  vertical-align: -2px;
+}
+.viewer-pop {
+  width: min(680px, 94vw);
+}
+.viewer-title {
+  margin: 0 0 14px;
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--primary);
+}
+.viewer-content {
+  margin: 0;
+  font-size: clamp(18px, 2.4vw, 24px);
+  line-height: 1.9;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 52vh;
+  overflow-y: auto;
+}
+.viewer-acts {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+  margin-top: 18px;
 }
 .subject-card {
   text-align: left;
