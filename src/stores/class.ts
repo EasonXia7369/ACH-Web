@@ -67,5 +67,5 @@ export const useClassStore = defineStore('class', () => {
     loaded.value = false
   }
 
-  return { classes, current, students, loaded, loadClasses, switchTo, reset }
+  return { classes, current, students, teachers, loaded, loadClasses, switchTo, reset }
 })
