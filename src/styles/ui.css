@@ -218,6 +218,15 @@
   animation: pop-in var(--dur-med) var(--ease-spring);
 }
 
+.gbackdrop .pop,
+.gbackdrop .modal,
+.pop-backdrop .pop,
+.pop-backdrop .modal,
+.modal-backdrop .modal,
+.modal-backdrop .box {
+  animation: pop-in var(--dur-med) var(--ease-spring);
+}
+
 @keyframes pop-in {
   from {
     transform: translateY(14px) scale(0.96);
@@ -244,6 +253,11 @@
   border-radius: 999px;
   z-index: 120;
   box-shadow: var(--shadow);
+}
+
+/* 表格数字统一等宽（统计/名单可读性） */
+table {
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---------- 文本工具 ---------- */
