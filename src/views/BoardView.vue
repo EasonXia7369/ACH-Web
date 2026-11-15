@@ -509,23 +509,10 @@ onMounted(() => {
     border-color var(--dur-fast) var(--ease-spring),
     transform var(--dur-fast) var(--ease-spring),
     box-shadow var(--dur-fast) var(--ease-spring);
-  animation: card-in var(--dur-med) var(--ease-spring) backwards;
-}
-@keyframes card-in {
-  from {
-    transform: translateY(10px);
-    opacity: 0;
-  }
-  to {
-    transform: none;
-    opacity: 1;
-  }
 }
 .subject-card:hover {
   background: var(--field-hover);
   border-color: var(--primary);
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
 }
 .subject-card:active {
   transform: scale(0.98);

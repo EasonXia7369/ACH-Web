@@ -22,20 +22,6 @@
   box-shadow: var(--shadow), var(--glass-inset);
 }
 
-/* 可交互卡片：hover 浮起（苹果 app 图标式反馈） */
-.glass.interactive {
-  transition:
-    transform var(--dur-fast) var(--ease-spring),
-    box-shadow var(--dur-fast) var(--ease-spring);
-}
-.glass.interactive:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.12), var(--glass-inset);
-}
-:root.dark .glass.interactive:hover {
-  box-shadow: 0 16px 44px rgba(0, 0, 0, 0.5), var(--glass-inset);
-}
-
 /* ---------- 按钮 ---------- */
 .gbtn {
   font-family: inherit;

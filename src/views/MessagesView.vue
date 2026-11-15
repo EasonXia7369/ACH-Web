@@ -239,7 +239,7 @@ function playVoice(m: ChatMessage) {
         }"
       >
         <div class="bubble">
-          <div class="meta">{{ m.sender_role === 'teacher' ? '老师' : '值日生' }} · {{ timeLabel(m.created_at) }}</div>
+          <div class="meta"><span>{{ m.sender_role === 'teacher' ? '老师' : '值日生' }}</span><span class="meta-time">{{ timeLabel(m.created_at) }}</span></div>
           <template v-if="m.kind === 'text'">{{ m.body }}</template>
           <template v-else-if="m.kind === 'image'">
             <img :src="chat.mediaSrc(m)" class="chat-img" loading="lazy" @click="previewImage = chat.mediaSrc(m)" />
@@ -377,6 +377,12 @@ function playVoice(m: ChatMessage) {
   font-size: 10.5px;
   color: var(--faint);
   margin-bottom: 3px;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+.meta-time {
+  font-variant-numeric: tabular-nums;
 }
 .chat-img {
   max-width: min(320px, 100%);
