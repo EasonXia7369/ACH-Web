@@ -3,10 +3,12 @@ import { computed, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 import { get, post, del } from '@/api'
 import { useClassStore } from '@/stores/class'
+import { useChatStore } from '@/stores/chat'
 import { dk } from '@/utils/dates'
 
 const props = defineProps<{ classId: number }>()
 const store = useClassStore()
+const chat = useChatStore()
 
 interface Leave {
   id: number
@@ -37,6 +39,8 @@ async function load() {
 }
 
 watch(() => props.classId, load, { immediate: true })
+// 审批结果影响考勤 → 自动刷新
+watch(() => chat.refreshTick, () => load())
 
 async function apply() {
   error.value = ''

@@ -5,12 +5,15 @@ import dayjs from 'dayjs'
 import { useIntervalFn } from '@vueuse/core'
 import { get, put } from '@/api'
 import { useAuthStore } from '@/stores/auth'
+import { useChatStore } from '@/stores/chat'
+
 import { useClassStore } from '@/stores/class'
 import { dk, STATUS_META } from '@/utils/dates'
 import Icon from '@/components/Icon.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
+const chat = useChatStore()
 const store = useClassStore()
 
 const isStudent = computed(() => auth.user?.role === 'student')
@@ -145,6 +148,8 @@ async function load() {
 }
 
 watch(() => store.current?.id, load, { immediate: true })
+// 其他设备变更了作业/考勤/值日 → 自动重拉
+watch(() => chat.refreshTick, () => load())
 
 /* ---------- 作业卡片墙 ---------- */
 const taskOf = (subject: string) => tasks.value.find((t) => t.subject === subject)

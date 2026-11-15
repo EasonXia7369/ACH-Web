@@ -3,9 +3,11 @@ import { computed, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 import { get, put } from '@/api'
 import { useClassStore } from '@/stores/class'
+import { useChatStore } from '@/stores/chat'
 
 const props = defineProps<{ classId: number }>()
 const store = useClassStore()
+const chat = useChatStore()
 
 interface Member {
   student_id: number
@@ -39,6 +41,8 @@ async function load() {
 }
 
 watch([weekStart, props.classId], load, { immediate: true })
+// 其他端变更值日表 → 自动刷新
+watch(() => chat.refreshTick, () => load())
 
 function shiftWeek(n: number) {
   weekStart.value = dayjs(weekStart.value).add(n * 7, 'day').format('YYYY-MM-DD')

@@ -3,11 +3,13 @@ import { computed, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 import { get, put } from '@/api'
 import { useClassStore } from '@/stores/class'
+import { useChatStore } from '@/stores/chat'
 import { STATUS_META, SLOT_LABEL, dk, weekdayCn } from '@/utils/dates'
 import { pinyinInitial, initialOf } from '@/utils/pinyin'
 
 const props = defineProps<{ classId: number }>()
 const store = useClassStore()
+const chat = useChatStore()
 
 const day = ref(dk())
 const records = ref<Map<string, { status: string; note: string }>>(new Map())
@@ -84,6 +86,8 @@ async function load() {
 }
 
 watch([day, props.classId], load, { immediate: true })
+// 其他端变更考勤 → 自动刷新
+watch(() => chat.refreshTick, () => load())
 
 function shiftDay(n: number) {
   day.value = dk(dayjs(day.value).add(n, 'day'))

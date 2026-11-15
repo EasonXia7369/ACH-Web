@@ -4,12 +4,14 @@ import dayjs from 'dayjs'
 import { get, put, del } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useClassStore } from '@/stores/class'
+import { useChatStore } from '@/stores/chat'
 import { exportXlsx } from '@/utils/xlsx'
 import { dk, weekdayCn } from '@/utils/dates'
 import { initialOf } from '@/utils/pinyin'
 
 const props = defineProps<{ classId: number }>()
 const store = useClassStore()
+const chat = useChatStore()
 const auth = useAuthStore()
 
 const isStudent = computed(() => auth.user?.role === 'student')
@@ -62,6 +64,8 @@ async function loadRange() {
 }
 
 watch([rangeFrom, rangeTo, props.classId], loadRange, { immediate: true })
+// 其他端变更作业 → 自动刷新
+watch(() => chat.refreshTick, () => loadRange())
 
 watch(day, () => {
   // 换天时载入当天已有记录到勾选状态

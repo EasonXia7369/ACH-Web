@@ -24,6 +24,8 @@ export const useChatStore = defineStore('chat', () => {
   const messages = ref<ChatMessage[]>([])
   const conn = ref<ConnState>('off')
   const unread = ref(0)
+  /** 收到数据变更广播（作业/考勤/值日/请假）时 +1，各板块监听后重拉 */
+  const refreshTick = ref(0)
   const popup = ref<ChatMessage | null>(null) // 大板全屏弹出卡片（收到的老师消息）
 
   let classId = 0
@@ -96,6 +98,10 @@ export const useChatStore = defineStore('chat', () => {
       if (ws !== socket) return
       try {
         const data = JSON.parse(ev.data as string)
+        if (data.type === 'refresh') {
+          refreshTick.value++
+          return
+        }
         if (data.type === 'message') {
           const m = data.message as ChatMessage
           if (!messages.value.some((x) => x.id === m.id)) {
@@ -163,6 +169,7 @@ export const useChatStore = defineStore('chat', () => {
     messages,
     conn,
     unread,
+    refreshTick,
     popup,
     connect,
     reset,
