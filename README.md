@@ -1,6 +1,6 @@
 # Ark Class Hub · Web（前端）
 
-方舟班级中心的前端：Vite + Vue 3 + TypeScript + Pinia，PWA。配合后端仓库 [`Ark-Class-Hub-Server`](https://github.com/EasonXia7369/Ark-Class-Hub-Server) 使用。
+方舟班级中心的前端：Vite + Vue 3 + TypeScript + Pinia，PWA。配合后端仓库 [`Ark-Class-Hub-Server`](https://github.com/EasonXia7369/ArkClassHub-Server) 使用。
 
 - 生产地址：https://ark.macrostar.top （Cloudflare Pages，push 到 main 自动部署）
 - API 地址：https://arkapi.macrostar.top（由 `.env.production` 的 `VITE_API_BASE` 注入）
