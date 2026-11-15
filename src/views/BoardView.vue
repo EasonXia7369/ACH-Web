@@ -157,15 +157,7 @@ const taskOf = (subject: string) => tasks.value.find((t) => t.subject === subjec
   )
   const emptySubjects = computed(() => (store.current?.subjects ?? []).filter((s) => !taskOf(s)))
 
-// 大卡查看（全屏放大）
-  const viewer = ref<{ subject: string; content: string } | null>(null)
-  function openViewer(subject: string) {
-    const t = taskOf(subject)
-    if (!t) return
-    viewer.value = { subject, content: t.content }
-  }
-
-  // 编辑器（老师/值日生均可）
+// 编辑器（老师/值日生均可）
   const editor = ref<{ subject: string; content: string; isNew: boolean } | null>(null)
 function openEditor(subject: string) {
   const t = taskOf(subject)
@@ -206,11 +198,6 @@ async function saveMissing() {
   missingMark.value = null
 }
 
-function openSubjectCard(subject: string) {
-  const t = taskOf(subject)
-  if (t) openViewer(subject)
-  else openEditor(subject)
-}
 
 /* ---------- toast ---------- */
 const toastMsg = ref('')
@@ -249,23 +236,28 @@ onMounted(() => {
       <div class="glass wall-card">
         <div class="sec-head">
           <h2><Icon name="homework" :size="17" /> 今日作业</h2>
-          <span class="hint">{{ isStudent ? '点卡片查看；弹窗内可布置、登记未交' : '点空卡布置，点卡片查看放大' }}</span>
+          <span class="hint">{{ isStudent ? '作业实时展示，点卡片上的按钮登记未交或修改' : '布置后自动放大展示；点卡片按钮登记未交或修改' }}</span>
         </div>
         <div class="wall">
-          <button
-            v-for="s in store.current?.subjects ?? []"
-            :key="s"
-            class="subject-card"
-            :class="{ filled: !!taskOf(s) }"
-            @click="openSubjectCard(s)"
-          >
-            <span class="subject-name">{{ s }}</span>
-            <span v-if="taskOf(s)" class="subject-content">{{ taskOf(s)!.content }}</span>
-            <span v-else class="subject-empty">
-              <Icon name="plus" :size="18" />
-              {{ isStudent ? '老师还没布置' : '点击布置作业' }}
-            </span>
-          </button>
+          <div v-for="t in filledTasks" :key="t.subject" class="subject-card big">
+            <div class="big-head">
+              <span class="subject-name">{{ t.subject }}</span>
+              <span class="big-acts">
+                <button class="gmini" @click="openMissing(t.subject)">登记未交</button>
+                <button class="gmini" @click="openEditor(t.subject)">编辑</button>
+              </span>
+            </div>
+            <div class="subject-content big">{{ t.content }}</div>
+          </div>
+          <div v-if="emptySubjects.length" class="empty-row">
+            <button v-for="s in emptySubjects" :key="s" class="subject-card" @click="openEditor(s)">
+              <span class="subject-name">{{ s }}</span>
+              <span class="subject-empty"><Icon name="plus" :size="16" /> 布置</span>
+            </button>
+          </div>
+          <p v-if="!filledTasks.length" class="foot-note" style="margin: 0">
+            今日作业待布置{{ isStudent ? '，老师布置后会实时出现在这里' : '' }}
+          </p>
         </div>
       </div>
     </div>
@@ -341,21 +333,6 @@ onMounted(() => {
       </div>
     </div>
   </div>
-
-  <!-- 作业全屏放大（后排可读） -->
-  <Teleport to="body">
-    <div v-if="viewer" class="gbackdrop" @click.self="viewer = null">
-      <div class="gpop viewer-pop">
-        <h3 class="viewer-title">{{ viewer.subject }} · 今日作业</h3>
-        <p class="viewer-content">{{ viewer.content }}</p>
-        <div class="viewer-acts">
-          <button class="gbtn" @click="openMissing(viewer.subject); viewer = null">登记未交</button>
-          <button class="gbtn" @click="openEditor(viewer.subject); viewer = null">编辑</button>
-          <button class="gbtn primary" @click="viewer = null">关闭</button>
-        </div>
-      </div>
-    </div>
-  </Teleport>
 
   <!-- 作业编辑器（老师/管理员） -->
   <Teleport to="body">
@@ -520,50 +497,50 @@ onMounted(() => {
 }
 .wall {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 12px;
+  grid-template-columns: 1fr;
+  gap: 10px;
 }
 .subject-card.big {
-  min-height: 0;
-  padding: 16px 18px;
+  padding: 16px 20px;
+  cursor: default;
 }
-.subject-card.big .subject-content.big {
-  font-size: 16px;
-  line-height: 1.8;
+.subject-card.big:hover {
+  background: var(--field);
+  border-color: var(--line);
+  transform: none;
+  box-shadow: none;
+}
+.big-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.big-acts {
+  display: flex;
+  gap: 6px;
+}
+.subject-content.big {
+  font-size: 19px;
+  line-height: 1.85;
   color: var(--text);
-  white-space: pre-wrap;
-  display: block;
-  -webkit-line-clamp: unset;
-  overflow: visible;
-}
-.expand-icon {
-  color: var(--faint);
-  margin-left: 4px;
-  vertical-align: -2px;
-}
-.viewer-pop {
-  width: min(680px, 94vw);
-}
-.viewer-title {
-  margin: 0 0 14px;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--primary);
-}
-.viewer-content {
-  margin: 0;
-  font-size: clamp(18px, 2.4vw, 24px);
-  line-height: 1.9;
+  font-weight: 500;
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 52vh;
-  overflow-y: auto;
 }
-.viewer-acts {
+.empty-row {
+  grid-column: 1 / -1;
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
-  justify-content: flex-end;
-  margin-top: 18px;
+}
+.empty-row .subject-card {
+  min-height: 0;
+  padding: 10px 14px;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
 }
 .subject-card {
   text-align: left;
