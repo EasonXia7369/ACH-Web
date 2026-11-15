@@ -249,7 +249,7 @@ function playVoice(m: ChatMessage) {
         }"
       >
         <div class="bubble">
-          <div class="meta"><span>{{ m.sender_role === 'teacher' ? '老师' : '值日生' }}</span><span class="meta-time">{{ timeLabel(m.created_at) }}</span></div>
+          <div class="meta"><span>{{ m.sender_name ?? (m.sender_role === 'teacher' ? '老师' : '值日生') }}</span><span class="meta-time">{{ timeLabel(m.created_at) }}</span></div>
           <template v-if="m.kind === 'text'">{{ m.body }}  <div v-if="toastMsg" class="gtoast">{{ toastMsg }}</div>
 </template>
           <template v-else-if="m.kind === 'image'">

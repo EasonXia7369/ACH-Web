@@ -1,11 +1,14 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { get, getToken, mediaUrl, post, upload, wsUrl } from '@/api'
+import { useIdentityStore } from '@/stores/identity'
 
 export interface ChatMessage {
   id: number
   class_id: number
   sender_role: 'teacher' | 'student'
+  sender_name?: string
+  actor_student_id?: number | null
   kind: 'text' | 'image' | 'voice'
   body: string
   has_media: boolean
@@ -222,9 +225,11 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   async function sendText(cid: number, body: string): Promise<{ queued: boolean }> {
+    const identity = useIdentityStore()
     try {
       const res = await post<{ message: ChatMessage }>(`/api/classes/${cid}/messages`, {
         body,
+        actor_student_id: identity.studentId ?? undefined,
       })
       if (!messages.value.some((m) => m.id === res.message.id)) messages.value.push(res.message)
       markSeenId(cid, res.message.id)
@@ -243,7 +248,9 @@ export const useChatStore = defineStore('chat', () => {
     mime: string,
     durationMs?: number,
   ): Promise<void> {
+    const identity = useIdentityStore()
     const q = new URLSearchParams({ kind, mime })
+    if (identity.studentId) q.set('actor', String(identity.studentId))
     if (kind === 'voice' && durationMs) q.set('duration', String(durationMs))
     const res = await upload<{ message: ChatMessage }>(
       `/api/classes/${cid}/messages/upload?${q.toString()}`,

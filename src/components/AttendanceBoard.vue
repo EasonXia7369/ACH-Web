@@ -3,12 +3,14 @@ import { computed, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 import { get, put } from '@/api'
 import { useClassStore } from '@/stores/class'
+import { useIdentityStore } from '@/stores/identity'
 import { useChatStore } from '@/stores/chat'
 import { STATUS_META, SLOT_LABEL, dk, weekdayCn } from '@/utils/dates'
 import { pinyinInitial, initialOf } from '@/utils/pinyin'
 
 const props = defineProps<{ classId: number }>()
 const store = useClassStore()
+const identity = useIdentityStore()
 const chat = useChatStore()
 
 const day = ref(dk())
@@ -126,6 +128,7 @@ async function saveEntry(status: string, note: string) {
   const { sid, slot } = pop.value!
   await put(`/api/classes/${props.classId}/attendance`, {
     day: day.value,
+    actor_student_id: identity.studentId ?? undefined,
     entries: [{ student_id: sid, slot, status, note }],
   })
   if (status === 'present') {

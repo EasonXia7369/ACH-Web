@@ -11,6 +11,13 @@ export interface Student {
   active: number
 }
 
+export interface TeacherInfo {
+  id: number
+  name: string
+  role: string
+  is_owner: number
+}
+
 export interface ClassInfo {
   id: number
   name: string
@@ -25,6 +32,7 @@ export const useClassStore = defineStore('class', () => {
   const classes = ref<ClassInfo[]>([])
   const current = ref<ClassInfo | null>(null)
   const students = ref<Student[]>([])
+  const teachers = ref<TeacherInfo[]>([])
   const loaded = ref(false)
 
   async function loadClasses() {
@@ -44,8 +52,9 @@ export const useClassStore = defineStore('class', () => {
   async function switchTo(id: number) {
     current.value = classes.value.find((c) => c.id === id) ?? null
     if (current.value) {
-      const res = await get<{ class: ClassInfo; students: Student[] }>(`/api/classes/${id}`)
+      const res = await get<{ class: ClassInfo; students: Student[]; teachers?: TeacherInfo[] }>(`/api/classes/${id}`)
       students.value = res.students
+      teachers.value = res.teachers ?? []
       current.value = { ...current.value, subjects: res.class.subjects }
     }
   }
@@ -54,6 +63,7 @@ export const useClassStore = defineStore('class', () => {
     classes.value = []
     current.value = null
     students.value = []
+    teachers.value = []
     loaded.value = false
   }
 

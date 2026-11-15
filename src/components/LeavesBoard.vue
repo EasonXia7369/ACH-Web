@@ -3,11 +3,13 @@ import { computed, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 import { get, post, del } from '@/api'
 import { useClassStore } from '@/stores/class'
+import { useIdentityStore } from '@/stores/identity'
 import { useChatStore } from '@/stores/chat'
 import { dk } from '@/utils/dates'
 
 const props = defineProps<{ classId: number }>()
 const store = useClassStore()
+const identity = useIdentityStore()
 const chat = useChatStore()
 
 interface Leave {
@@ -56,6 +58,7 @@ async function apply() {
   try {
     await post(`/api/classes/${props.classId}/leaves`, {
       student_id: studentId.value,
+      actor_student_id: identity.studentId ?? undefined,
       from_day: fromDay.value,
       to_day: toDay.value,
       reason: reason.value,

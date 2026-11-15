@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { get, post, put } from '@/api'
+import { get, post, put, del } from '@/api'
 import { useAuthStore } from '@/stores/auth'
 import { useClassStore } from '@/stores/class'
 import StudentsManager from '@/components/StudentsManager.vue'
@@ -14,6 +14,46 @@ const store = useClassStore()
 
 const isAdmin = computed(() => auth.user?.role === 'admin')
 const isStudent = computed(() => auth.user?.role === 'student')
+
+/* 协作教师管理 */
+const addTeacherId = ref<number | null>(null)
+const availableTeachers = ref<Array<{ id: number; name: string }>>([])
+
+async function refreshAvailableTeachers() {
+  if (!store.current) return
+  availableTeachers.value = (
+    await get<{ teachers: Array<{ id: number; name: string }> }>(
+      `/api/classes/${store.current.id}/available-teachers`,
+    )
+  ).teachers
+}
+
+async function addTeacher() {
+  if (!addTeacherId.value || !store.current) return
+  try {
+    await post(`/api/classes/${store.current.id}/teachers`, { user_id: addTeacherId.value })
+    toastMsg.value = '已添加协作教师'
+    setTimeout(() => (toastMsg.value = ''), 2200)
+    addTeacherId.value = null
+    await refreshAvailableTeachers()
+    await store.switchTo(store.current.id)
+  } catch (e: any) {
+    toastMsg.value = e.message
+    setTimeout(() => (toastMsg.value = ''), 2600)
+  }
+}
+
+async function removeTeacher(t: { id: number; name: string }) {
+  if (!confirm(`移除协作教师 ${t.name}？其历史操作记录保留。`)) return
+  try {
+    await del(`/api/classes/${store.current!.id}/teachers/${t.id}`)
+    await refreshAvailableTeachers()
+    await store.switchTo(store.current!.id)
+  } catch (e: any) {
+    toastMsg.value = e.message
+    setTimeout(() => (toastMsg.value = ''), 2600)
+  }
+}
 
 type Tab = 'students' | 'timetable' | 'duty' | 'settings' | 'audit' | 'accounts' | 'invites' | 'import'
 const tabs = computed<Array<{ key: Tab; label: string; icon: string }>>(() => {
@@ -332,6 +372,23 @@ onMounted(() => {
         <button class="gbtn primary" @click="saveStuPass">保存</button>
       </div>
       <button class="gmini danger" style="margin-top: 8px" @click="clearStuPass">清除学生密码</button>
+
+      <h3 class="sec-title" style="margin-top: 20px">协作教师</h3>
+      <p class="foot-note" style="margin: 0 0 8px">协作教师与本班班主任权限相同，都可编辑考勤、作业与消息。</p>
+      <div class="acct-list">
+        <div v-for="t in store.teachers" :key="t.id" class="acct-row">
+          <b>{{ t.name }}</b>
+          <span class="role-tag">{{ t.is_owner ? '班主任' : '协作教师' }}</span>
+          <button v-if="!t.is_owner" class="gmini danger" @click="removeTeacher(t)">移除</button>
+        </div>
+      </div>
+      <div class="row" style="margin-top: 10px">
+        <select v-model.number="addTeacherId" class="gselect" style="flex: 1">
+          <option :value="null" disabled>选择要添加的教师</option>
+          <option v-for="t in availableTeachers" :key="t.id" :value="t.id">{{ t.name }}</option>
+        </select>
+        <button class="gbtn" :disabled="!addTeacherId" @click="addTeacher">添加</button>
+      </div>
 
       <h3 class="sec-title" style="margin-top: 20px">作业科目（顿号/逗号分隔）</h3>
       <textarea v-model="subjectsText" class="gtextarea" style="width: 100%" rows="3"></textarea>
