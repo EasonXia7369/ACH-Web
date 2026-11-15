@@ -1,104 +1,98 @@
 /*
- * 班级中心设计令牌 —— 液态玻璃 / Fluent 亚克力
- * 双主题：html.dark（深）与默认（浅），由 VueUse useDark 驱动（跟随系统 + 手动三态）。
- * 视觉方案整体可调：改这里的令牌即可全局换肤。
+ * 班级中心设计令牌 v2 —— Apple HIG 材质 + shadcn 中性骨架
+ * 基底：苹果 Liquid Glass（vibrancy 材质、连续圆角、弹性动效）
+ * 骨架：shadcn 式中性色阶、1px 边框、克制间距、焦点态
+ * 字体：MiSans（分片 webfont）+ 系统回退；数字走 SF/Bahnschrift 风
  */
 
 /* ---------- 深色主题 ---------- */
 :root.dark {
-  /* 壁纸：深夜极光 */
-  --wallpaper-base: #0a0e1a;
+  /* 壁纸：近黑底 + 极淡的环境光斑（给玻璃提供 vibrancy 来源，但不喧宾夺主） */
+  --wallpaper-base: #09090b;
   --wallpaper-blobs:
-    radial-gradient(42rem 42rem at 8% -10%, rgba(79, 110, 247, 0.22), transparent 60%),
-    radial-gradient(38rem 38rem at 100% 0%, rgba(124, 58, 237, 0.16), transparent 55%),
-    radial-gradient(46rem 46rem at 55% 115%, rgba(14, 165, 233, 0.14), transparent 60%),
-    radial-gradient(30rem 30rem at 90% 80%, rgba(16, 185, 129, 0.08), transparent 55%);
+    radial-gradient(44rem 44rem at 6% -8%, rgba(120, 140, 255, 0.09), transparent 62%),
+    radial-gradient(40rem 40rem at 102% 2%, rgba(80, 100, 220, 0.07), transparent 58%),
+    radial-gradient(50rem 50rem at 50% 118%, rgba(60, 160, 220, 0.06), transparent 60%);
 
-  /* 玻璃面 */
-  --panel: rgba(21, 27, 43, 0.55);
-  --panel-strong: rgba(23, 30, 48, 0.82);
-  --field: rgba(255, 255, 255, 0.06);
+  /* 材质（iOS dark materials） */
+  --panel: rgba(28, 28, 32, 0.58);
+  --panel-strong: rgba(24, 24, 28, 0.86);
+  --field: rgba(255, 255, 255, 0.065);
   --field-hover: rgba(255, 255, 255, 0.1);
-  --glass-blur: blur(20px) saturate(150%);
-  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  --glass-blur: blur(28px) saturate(180%);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.07);
 
-  /* 线与描边 */
-  --line: rgba(255, 255, 255, 0.11);
-  --line-soft: rgba(255, 255, 255, 0.06);
+  /* shadcn 式中性色阶 */
+  --line: rgba(255, 255, 255, 0.1);
+  --line-soft: rgba(255, 255, 255, 0.055);
+  --text: #f5f5f7;
+  --muted: #98989d;
+  --faint: #6e6e73;
 
-  /* 文字 */
-  --text: #e9edf7;
-  --muted: #9aa5bd;
-  --faint: #6d7890;
+  /* 苹果系统蓝 + 语义色（暗色变体） */
+  --primary: #0a84ff;
+  --primary-dark: #3395ff;
+  --primary-soft: rgba(10, 132, 255, 0.16);
+  --on-primary: #ffffff;
 
-  /* 主色 */
-  --primary: #7d97ff;
-  --primary-dark: #5f7bf5;
-  --primary-soft: rgba(125, 151, 255, 0.16);
-  --on-primary: #0b1130;
+  --present: #30d158;
+  --present-bg: rgba(48, 209, 88, 0.14);
+  --leave: #ff9f0a;
+  --leave-bg: rgba(255, 159, 10, 0.15);
+  --late: #64a2ff;
+  --late-bg: rgba(100, 162, 255, 0.16);
+  --absent: #ff453a;
+  --absent-bg: rgba(255, 69, 58, 0.14);
+  --violate: #bf5af2;
+  --violate-bg: rgba(191, 90, 242, 0.15);
 
-  /* 状态语义色（暗底提亮） */
-  --present: #3fd9a3;
-  --present-bg: rgba(63, 217, 163, 0.14);
-  --leave: #f5b04a;
-  --leave-bg: rgba(245, 176, 74, 0.15);
-  --late: #7ea6ff;
-  --late-bg: rgba(126, 166, 255, 0.16);
-  --absent: #ff7a76;
-  --absent-bg: rgba(255, 122, 118, 0.15);
-  --violate: #c39bff;
-  --violate-bg: rgba(195, 155, 255, 0.15);
-
-  /* 阴影与圆角 */
-  --shadow: 0 10px 36px rgba(0, 0, 0, 0.42), 0 2px 8px rgba(0, 0, 0, 0.28);
-  --radius: 18px;
-  --radius-sm: 12px;
+  --shadow: 0 12px 40px rgba(0, 0, 0, 0.45), 0 2px 10px rgba(0, 0, 0, 0.3);
+  --radius: 16px;
+  --radius-sm: 10px;
 
   color-scheme: dark;
 }
 
 /* ---------- 浅色主题 ---------- */
 :root {
-  --wallpaper-base: #eef3fb;
+  --wallpaper-base: #f5f5f7;
   --wallpaper-blobs:
-    radial-gradient(42rem 42rem at 8% -10%, rgba(99, 132, 255, 0.2), transparent 60%),
-    radial-gradient(38rem 38rem at 100% 0%, rgba(167, 139, 250, 0.16), transparent 55%),
-    radial-gradient(46rem 46rem at 55% 115%, rgba(56, 189, 248, 0.16), transparent 60%),
-    radial-gradient(30rem 30rem at 90% 80%, rgba(52, 211, 153, 0.12), transparent 55%);
+    radial-gradient(44rem 44rem at 6% -8%, rgba(180, 195, 255, 0.32), transparent 62%),
+    radial-gradient(40rem 40rem at 102% 2%, rgba(160, 180, 250, 0.24), transparent 58%),
+    radial-gradient(50rem 50rem at 50% 118%, rgba(150, 210, 245, 0.22), transparent 60%);
 
-  --panel: rgba(255, 255, 255, 0.6);
-  --panel-strong: rgba(255, 255, 255, 0.88);
-  --field: rgba(255, 255, 255, 0.78);
+  --panel: rgba(255, 255, 255, 0.62);
+  --panel-strong: rgba(255, 255, 255, 0.9);
+  --field: rgba(255, 255, 255, 0.75);
   --field-hover: rgba(255, 255, 255, 0.95);
-  --glass-blur: blur(20px) saturate(150%);
-  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.85);
+  --glass-blur: blur(28px) saturate(180%);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 
-  --line: rgba(31, 41, 61, 0.1);
-  --line-soft: rgba(31, 41, 61, 0.05);
+  --line: rgba(0, 0, 0, 0.085);
+  --line-soft: rgba(0, 0, 0, 0.045);
+  --text: #1d1d1f;
+  --muted: #6e6e73;
+  --faint: #a1a1a6;
 
-  --text: #1c2438;
-  --muted: #5d6779;
-  --faint: #8d96a9;
-
-  --primary: #3b5bdb;
-  --primary-dark: #2f49b2;
-  --primary-soft: rgba(59, 91, 219, 0.1);
+  --primary: #007aff;
+  --primary-dark: #0071e3;
+  --primary-soft: rgba(0, 122, 255, 0.1);
   --on-primary: #ffffff;
 
-  --present: #0f9d76;
-  --present-bg: rgba(15, 157, 118, 0.12);
-  --leave: #b45309;
-  --leave-bg: rgba(180, 83, 9, 0.12);
-  --late: #1d4ed8;
-  --late-bg: rgba(29, 78, 216, 0.1);
-  --absent: #c81e1e;
-  --absent-bg: rgba(200, 30, 30, 0.1);
-  --violate: #6d28d9;
-  --violate-bg: rgba(109, 40, 217, 0.1);
+  --present: #34c759;
+  --present-bg: rgba(52, 199, 89, 0.12);
+  --leave: #ff9500;
+  --leave-bg: rgba(255, 149, 0, 0.12);
+  --late: #007aff;
+  --late-bg: rgba(0, 122, 255, 0.09);
+  --absent: #ff3b30;
+  --absent-bg: rgba(255, 59, 48, 0.1);
+  --violate: #af52de;
+  --violate-bg: rgba(175, 82, 222, 0.1);
 
-  --shadow: 0 8px 28px rgba(31, 45, 80, 0.1), 0 1px 3px rgba(31, 45, 80, 0.08);
-  --radius: 18px;
-  --radius-sm: 12px;
+  --shadow: 0 10px 32px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.06);
+  --radius: 16px;
+  --radius-sm: 10px;
 
   color-scheme: light;
 }
@@ -113,21 +107,54 @@ body {
   margin: 0;
   min-height: 100vh;
   color: var(--text);
-  font-family: 'Microsoft YaHei', 'PingFang SC', 'Hiragino Sans GB', -apple-system,
-    BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'MiSans', -apple-system, 'SF Pro Text', 'PingFang SC', 'Microsoft YaHei',
+    sans-serif;
+  font-size: 14.5px;
+  line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
   background-color: var(--wallpaper-base);
   background-image: var(--wallpaper-blobs);
   background-attachment: fixed;
 }
 
-/* 数字（时钟/统计）用等宽数字与 Windows 内置的 Bahnschrift 风格 */
+/* 苹果式动效曲线：所有过渡统一走这条弹性曲线 */
+:root {
+  --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+  --dur-fast: 0.18s;
+  --dur-med: 0.32s;
+}
+
+/* 数字（时钟/统计）：SF Pro Display 风 */
 .num {
-  font-family: Bahnschrift, 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  font-family: 'SF Pro Display', 'MiSans', 'Bahnschrift', sans-serif;
   font-variant-numeric: tabular-nums;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
 }
 
 ::selection {
   background: var(--primary-soft);
+}
+
+/* 细滚动条 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* 键盘焦点环（shadcn 式 ring） */
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 4px;
 }

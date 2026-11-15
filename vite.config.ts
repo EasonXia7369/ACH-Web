@@ -15,8 +15,8 @@ export default defineConfig({
         short_name: '班级中心',
         description: '班级考勤、作业、值日日常管理工作台',
         lang: 'zh-CN',
-        theme_color: '#f2f5fa',
-        background_color: '#f2f5fa',
+        theme_color: '#f5f5f7',
+        background_color: '#f5f5f7',
         display: 'standalone',
         start_url: '/',
         icons: [
@@ -38,6 +38,16 @@ export default defineConfig({
             options: {
               cacheName: 'api-cache',
               expiration: { maxEntries: 100, maxAgeSeconds: 86400 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          {
+            // MiSans 分片字体：CacheFirst（不可变资源，长期缓存）
+            urlPattern: /\.woff2$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'font-cache',
+              expiration: { maxEntries: 200, maxAgeSeconds: 31536000 },
               cacheableResponse: { statuses: [0, 200] },
             },
           },

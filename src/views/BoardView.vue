@@ -379,96 +379,108 @@ onMounted(() => {
 <style scoped>
 .board {
   display: grid;
-  grid-template-columns: 1fr 280px;
-  gap: 14px;
+  grid-template-columns: 1fr 300px;
+  gap: 16px;
   align-items: start;
+  animation: board-in var(--dur-med) var(--ease-spring);
+}
+@keyframes board-in {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: none; opacity: 1; }
 }
 .board-main {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
   min-width: 0;
 }
 .board-side {
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 16px;
 }
 
-/* 时钟 */
+/* 时钟：页面主视觉 */
 .row1 {
   display: grid;
-  grid-template-columns: 1.1fr 1fr;
-  gap: 14px;
+  grid-template-columns: 1.15fr 1fr;
+  gap: 16px;
 }
 .clock-card {
-  padding: 20px 22px 16px;
+  padding: 26px 28px 22px;
 }
 .clock {
-  font-size: clamp(44px, 6vw, 64px);
-  font-weight: 700;
+  font-size: clamp(56px, 7vw, 84px);
+  font-weight: 600;
   line-height: 1;
-  letter-spacing: 0.01em;
+  letter-spacing: -0.02em;
+  color: var(--text);
 }
 .clock .sec {
-  font-size: 0.38em;
-  color: var(--muted);
+  font-size: 0.34em;
+  color: var(--faint);
   font-weight: 500;
 }
 .clock-meta {
   display: flex;
   justify-content: space-between;
+  align-items: baseline;
   gap: 8px;
-  margin-top: 10px;
-  font-size: 12.5px;
+  margin-top: 14px;
+  font-size: 13.5px;
   color: var(--muted);
   flex-wrap: wrap;
 }
 .clock-meta .part {
   color: var(--primary);
-  font-weight: 700;
+  font-weight: 600;
+  font-size: 13px;
 }
 
 /* 寄语 */
 .quote-card {
-  padding: 18px 20px;
+  padding: 20px 22px;
   display: flex;
   flex-direction: column;
   justify-content: center;
 }
 .quote-icon {
   color: var(--faint);
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 .quote-text {
   margin: 0;
-  font-size: 15.5px;
-  font-weight: 600;
-  line-height: 1.7;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.75;
+  letter-spacing: 0.02em;
 }
 .quote-author {
-  margin: 8px 0 0;
+  margin: 10px 0 0;
   font-size: 12px;
   color: var(--faint);
 }
 
 /* 作业卡片墙 */
 .wall-card {
-  padding: 16px 18px;
+  padding: 18px 20px;
 }
 .sec-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
 }
 .sec-head h2 {
   margin: 0;
-  font-size: 14.5px;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
+  color: var(--text);
 }
 .hint {
   font-size: 11.5px;
@@ -477,7 +489,7 @@ onMounted(() => {
 .wall {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 10px;
+  gap: 12px;
 }
 .subject-card {
   text-align: left;
@@ -486,29 +498,46 @@ onMounted(() => {
   border: 1px solid var(--line);
   background: var(--field);
   border-radius: var(--radius-sm);
-  padding: 12px 14px;
-  min-height: 74px;
+  padding: 14px 16px;
+  min-height: 78px;
   color: var(--text);
   display: flex;
   flex-direction: column;
   gap: 6px;
-  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  transition:
+    background var(--dur-fast) var(--ease-spring),
+    border-color var(--dur-fast) var(--ease-spring),
+    transform var(--dur-fast) var(--ease-spring),
+    box-shadow var(--dur-fast) var(--ease-spring);
+  animation: card-in var(--dur-med) var(--ease-spring) backwards;
+}
+@keyframes card-in {
+  from {
+    transform: translateY(10px);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
 }
 .subject-card:hover {
   background: var(--field-hover);
   border-color: var(--primary);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
 }
 .subject-card:active {
   transform: scale(0.98);
 }
 .subject-name {
-  font-weight: 700;
-  font-size: 13.5px;
+  font-weight: 600;
+  font-size: 14px;
 }
 .subject-content {
   font-size: 12.5px;
   color: var(--muted);
-  line-height: 1.55;
+  line-height: 1.6;
   display: -webkit-box;
   -webkit-line-clamp: 3;
   -webkit-box-orient: vertical;
@@ -525,13 +554,13 @@ onMounted(() => {
 /* 出勤概况 */
 .att-card,
 .duty-card {
-  padding: 16px 18px;
+  padding: 18px 20px;
 }
 .att-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 10px 6px;
-  margin: 4px 0 14px;
+  gap: 12px 6px;
+  margin: 6px 0 16px;
 }
 .att-item {
   display: flex;
@@ -540,43 +569,34 @@ onMounted(() => {
   gap: 2px;
 }
 .att-num {
-  font-size: 26px;
-  font-weight: 700;
+  font-size: 30px;
+  font-weight: 600;
   line-height: 1.1;
+  letter-spacing: -0.01em;
 }
 .att-label {
   font-size: 11.5px;
   color: var(--muted);
 }
+.c-present { color: var(--present); }
+.c-leave { color: var(--leave); }
+.c-late { color: var(--late); }
+.c-absent { color: var(--absent); }
+.c-violate { color: var(--violate); }
 .att-names {
-  margin: -4px 0 12px;
+  margin: -4px 0 14px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 5px;
 }
 .name-line {
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--text);
   line-height: 1.6;
 }
 .name-line > span {
-  font-weight: 700;
+  font-weight: 600;
   margin-right: 6px;
-}
-.c-present {
-  color: var(--present);
-}
-.c-leave {
-  color: var(--leave);
-}
-.c-late {
-  color: var(--late);
-}
-.c-absent {
-  color: var(--absent);
-}
-.c-violate {
-  color: var(--violate);
 }
 
 /* 值日生 */
@@ -589,7 +609,7 @@ onMounted(() => {
   background: var(--primary-soft);
   color: var(--primary);
   font-size: 12.5px;
-  font-weight: 700;
+  font-weight: 600;
   padding: 5px 11px;
   border-radius: 999px;
   display: inline-flex;
@@ -616,15 +636,16 @@ onMounted(() => {
   background: var(--field);
   font-family: inherit;
   font-size: 13.5px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--text);
   cursor: pointer;
-  transition: 0.12s;
+  transition: transform var(--dur-fast) var(--ease-spring);
 }
 .miss-stu.miss {
   background: var(--absent-bg);
   border-color: var(--absent);
   color: var(--absent);
+  font-weight: 700;
 }
 .miss-stu:active {
   transform: scale(0.95);
