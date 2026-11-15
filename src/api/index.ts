@@ -57,6 +57,7 @@ export async function api<T = any>(
 ): Promise<T> {
   const headers: Record<string, string> = {}
   const token = getToken()
+  const hadToken = !!token
   if (token) headers.Authorization = `Bearer ${token}`
   if (body !== undefined) headers['Content-Type'] = 'application/json'
 
@@ -67,9 +68,9 @@ export async function api<T = any>(
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
-    if (res.status === 401 && !path.startsWith('/api/auth/')) {
-      // 会话失效：一体机回密码门，教师回登录页。
-      // 防循环：目标页本身就是当前页时只清凭证不跳转
+    // 会话失效（曾有令牌而现在 401）：一体机回密码门，教师回登录页。
+    // 从未登录过的公开页（如家长视图）不跳转，避免误伤
+    if (res.status === 401 && hadToken && !path.startsWith('/api/auth/')) {
       const wasKiosk = !!localStorage.getItem('ark-kiosk-token')
       setToken('')
       const target = wasKiosk ? '/kiosk' : '/login'
