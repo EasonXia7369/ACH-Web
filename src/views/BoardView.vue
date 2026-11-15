@@ -429,6 +429,8 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  position: sticky;
+  top: 16px;
 }
 
 /* 时钟：页面主视觉 */
@@ -519,8 +521,9 @@ onMounted(() => {
 }
 .wall {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  gap: 12px;
+  align-items: start;
 }
 .subject-card.big {
   padding: 16px 20px;
@@ -544,18 +547,28 @@ onMounted(() => {
   gap: 6px;
 }
 .subject-content.big {
-  font-size: 19px;
-  line-height: 1.85;
+  font-size: 17px;
+  line-height: 1.8;
   color: var(--text);
   font-weight: 500;
   white-space: pre-wrap;
   word-break: break-word;
+  max-height: 220px;
+  overflow-y: auto;
 }
 .empty-row {
   grid-column: 1 / -1;
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
+}
+@media (max-width: 1100px) {
+  .wall {
+    grid-template-columns: 1fr;
+  }
+  .board-side {
+    position: static;
+  }
 }
 .empty-row .subject-card {
   min-height: 0;
