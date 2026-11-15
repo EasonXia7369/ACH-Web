@@ -308,6 +308,7 @@ onMounted(() => {
     </div>
 
     <StudentsManager v-if="tab === 'students'" />
+    <TimetableBoard v-else-if="tab === 'timetable'" :class-id="store.current.id" />
     <DutyBoard v-else-if="tab === 'duty'" :class-id="store.current.id" />
 
     <div v-else-if="tab === 'settings'" class="glass pad">
