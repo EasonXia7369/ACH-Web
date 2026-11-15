@@ -94,6 +94,7 @@ onBeforeUnmount(() => chat.reset())
       <div class="rail-logo" title="班级中心">
         <BrandLogo :size="26" />
       </div>
+      <div class="rail-brand">方舟班级中心</div>
       <nav class="rail-nav">
         <RouterLink
           v-for="item in NAV"
@@ -334,6 +335,14 @@ onBeforeUnmount(() => chat.reset())
   padding: 14px 10px;
   gap: 8px;
   z-index: 40;
+}
+.rail-brand {
+  text-align: center;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  margin-bottom: 4px;
 }
 .rail-logo {
   width: 44px;

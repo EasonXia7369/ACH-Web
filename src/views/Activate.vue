@@ -45,10 +45,13 @@ async function submit() {
     <!-- 品牌区 -->
     <section class="brand-pane">
       <div class="brand-logo-row">
-        <BrandLogo :size="56" />
+        <BrandLogo :size="64" />
+        <div>
+          <div class="brand-cn">方舟班级中心</div>
+          <div class="brand-en">ARK CLASS HUB</div>
+        </div>
       </div>
-      <h1 class="brand-name">班级中心</h1>
-      <p class="brand-tag">输入邀请码，<br />一分钟开启你的班级日常。</p>
+      <h1 class="brand-name">一分钟开启<br />你的班级日常</h1>
     </section>
 
     <!-- 表单区 -->

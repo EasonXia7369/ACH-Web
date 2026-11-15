@@ -32,10 +32,14 @@ async function submit() {
     <!-- 品牌区 -->
     <section class="brand-pane">
       <div class="brand-logo-row">
-        <BrandLogo :size="56" />
+        <BrandLogo :size="64" />
+        <div>
+          <div class="brand-cn">方舟班级中心</div>
+          <div class="brand-en">ARK CLASS HUB</div>
+        </div>
       </div>
-      <h1 class="brand-name">班级中心</h1>
-      <p class="brand-tag">考勤 · 作业 · 值日 · 消息<br />一间教室的全部日常</p>
+      <h1 class="brand-name">让班级事务<br />一目了然</h1>
+      <p class="brand-tag">考勤 · 作业 · 值日 · 消息，<br />一间教室的全部日常。</p>
       <ul class="brand-feats">
         <li><span class="feat-icon"><Icon name="attendance" :size="17" /></span>出勤实时同步，请假一键审批</li>
         <li><span class="feat-icon"><Icon name="homework" :size="17" /></span>作业直达大屏，未交一目了然</li>

@@ -68,6 +68,7 @@ onMounted(async () => {
   <main class="login">
     <div class="box glass-strong">
       <div class="logo"><Icon name="monitor" :size="22" /></div>
+      <div class="brand-cn">方舟班级中心</div>
       <h1>一体机登记</h1>
       <p class="tip">
         选择班级，输入学生密码进入大板登记模式。操作会以「值日生」身份记录到日志。
@@ -117,6 +118,13 @@ onMounted(async () => {
   display: grid;
   place-items: center;
   margin-bottom: 12px;
+}
+.brand-cn {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  color: var(--faint);
+  margin: 10px 0 0;
 }
 h1 {
   margin: 0;

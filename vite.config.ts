@@ -11,7 +11,7 @@ export default defineConfig({
       injectRegister: 'auto',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: '班级中心 · Ark Class Hub',
+        name: '方舟班级中心 · Ark Class Hub',
         short_name: '班级中心',
         description: '班级考勤、作业、值日日常管理工作台',
         lang: 'zh-CN',
