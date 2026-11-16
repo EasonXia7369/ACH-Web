@@ -137,7 +137,7 @@ onBeforeUnmount(() => chat.reset())
           </select>
         </div>
         <div class="top-right">
-          <span class="whoami">{{ auth.user?.name }}<i v-if="auth.user?.role === 'admin'">管理员</i><i v-else-if="auth.user?.role === 'student'">值日生</i></span>
+          <span class="whoami"><span class="whoami-name">{{ auth.user?.name }}</span><i v-if="auth.user?.role === 'admin'">管理员</i><i v-else-if="auth.user?.role === 'student'">值日生</i></span>
           <button class="gbtn icon topbtn" :title="isDark ? '切换浅色' : '切换深色'" @click="toggleDark()">
             <Icon :name="isDark ? 'sun' : 'moon'" :size="17" />
           </button>
@@ -435,6 +435,12 @@ onBeforeUnmount(() => chat.reset())
 .topbtn {
   flex: none;
 }
+/* 桌面端深浅色/退出在侧栏底部，顶栏图标按钮仅手机端（侧栏隐藏时）出现 */
+@media (min-width: 861px) {
+  .gbtn.icon.topbtn {
+    display: none;
+  }
+}
 .whoami {
   font-size: 12.5px;
   color: var(--muted);
@@ -503,6 +509,17 @@ onBeforeUnmount(() => chat.reset())
   }
   .topbar {
     padding: 12px 16px 0;
+  }
+  /* 窄屏顶栏收缩：长姓名截断，给图标按钮让位 */
+  .whoami {
+    font-size: 11.5px;
+    max-width: 40vw;
+    flex: none;
+  }
+  .whoami-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .content {
     padding: 12px 16px calc(72px + env(safe-area-inset-bottom));

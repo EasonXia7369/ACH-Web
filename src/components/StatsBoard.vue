@@ -153,6 +153,7 @@ async function doExport() {
   </p>
 
   <div class="card tablecard">
+    <div class="table-scroll">
     <table class="stats">
       <thead>
         <tr>
@@ -179,6 +180,7 @@ async function doExport() {
         </tr>
       </tbody>
     </table>
+    </div>
   </div>
 
   <div v-if="data" class="card" style="margin-top: 12px">

@@ -288,6 +288,7 @@ function loadTask(t: any) {
     </div>
 
     <div class="card tablecard">
+      <div class="table-scroll">
       <table class="stats">
         <thead>
           <tr><th style="width: 30px">#</th><th style="width: 88px">姓名</th><th>未交次数</th><th style="text-align: left; padding-left: 10px">未交明细</th></tr>
@@ -301,6 +302,7 @@ function loadTask(t: any) {
           </tr>
         </tbody>
       </table>
+      </div>
     </div>
 
     <div class="card pad" style="margin-top: 12px">
@@ -688,8 +690,5 @@ textarea {
   display: flex;
   gap: 6px;
   flex: none;
-}
-.gmini.danger {
-  color: var(--absent);
 }
 </style>

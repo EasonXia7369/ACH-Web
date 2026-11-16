@@ -200,6 +200,7 @@ async function exportImage() {
   <div v-if="report" class="grid">
     <div class="glass pad">
       <h3 class="sec-title">出勤情况 <em>{{ report.total_students }} 人</em></h3>
+      <div class="table-scroll">
       <table class="gtable stats">
         <thead>
           <tr><th>#</th><th style="text-align: left">姓名</th><th>请假</th><th>迟到</th><th>旷课</th><th>违纪</th><th>合计</th></tr>
@@ -216,6 +217,7 @@ async function exportImage() {
           </tr>
         </tbody>
       </table>
+      </div>
     </div>
 
     <div class="glass pad">

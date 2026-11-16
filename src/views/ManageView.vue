@@ -163,6 +163,18 @@ async function initSettings() {
   oldPass.value = ''
   newPass.value = ''
   newPass2.value = ''
+  // 寄语来源
+  let qc: any = store.current?.quote_config
+  if (typeof qc === 'string') {
+    try {
+      qc = JSON.parse(qc)
+    } catch {
+      qc = null
+    }
+  }
+  quoteSource.value = qc?.source === 'hitokoto' ? 'hitokoto' : 'builtin'
+  quoteCats.value = Array.isArray(qc?.cats) ? [...qc.cats] : ['i', 'd']
+  quoteMaxLength.value = Number(qc?.max_length) || 30
   if (store.current) {
     try {
       const qp = await get<{ phrases: string[] }>('/api/classes/' + store.current.id + '/quick-phrases')
@@ -170,6 +182,48 @@ async function initSettings() {
     } catch {
       quickPhrasesText.value = ''
     }
+  }
+}
+
+/* 每日寄语来源（内置诗词 / 一言接口） */
+const HITOKOTO_CATS: Array<{ code: string; label: string }> = [
+  { code: 'a', label: '动画' },
+  { code: 'b', label: '漫画' },
+  { code: 'c', label: '游戏' },
+  { code: 'd', label: '文学' },
+  { code: 'e', label: '原创' },
+  { code: 'f', label: '网络' },
+  { code: 'h', label: '影视' },
+  { code: 'i', label: '诗词' },
+  { code: 'j', label: '网易云' },
+  { code: 'k', label: '哲学' },
+  { code: 'l', label: '抖机灵' },
+]
+const quoteSource = ref<'builtin' | 'hitokoto'>('builtin')
+const quoteCats = ref<string[]>(['i', 'd'])
+const quoteMaxLength = ref(30)
+
+function toggleQuoteCat(code: string) {
+  const i = quoteCats.value.indexOf(code)
+  if (i >= 0) quoteCats.value.splice(i, 1)
+  else quoteCats.value.push(code)
+}
+
+async function saveQuoteConfig() {
+  if (quoteSource.value === 'hitokoto' && !quoteCats.value.length) {
+    toast('至少选择一个句子分类')
+    return
+  }
+  try {
+    const res = await put<{ config: any }>(`/api/classes/${store.current!.id}/quote-config`, {
+      source: quoteSource.value,
+      cats: quoteCats.value,
+      max_length: quoteMaxLength.value,
+    })
+    if (store.current) store.current.quote_config = JSON.stringify(res.config)
+    toast(quoteSource.value === 'hitokoto' ? '已切换为一言接口，回到大板即生效' : '已切换为内置诗词')
+  } catch (e: any) {
+    toast(e.message)
   }
 }
 
@@ -484,6 +538,30 @@ onMounted(() => {
         <button class="gbtn" :disabled="!addTeacherId" @click="addTeacher">添加</button>
       </div>
 
+      <h3 class="sec-title" style="margin-top: 20px">每日寄语来源</h3>
+      <p class="foot-note" style="margin: 0 0 8px">大板寄语卡的句子来源。内置为精选古诗词（按日期轮换）；一言接口来自 hitokoto.cn，每天一条。</p>
+      <div class="gseg">
+        <button :class="{ on: quoteSource === 'builtin' }" @click="quoteSource = 'builtin'">内置诗词</button>
+        <button :class="{ on: quoteSource === 'hitokoto' }" @click="quoteSource = 'hitokoto'">一言接口</button>
+      </div>
+      <div v-if="quoteSource === 'hitokoto'" style="margin-top: 10px">
+        <p class="foot-note" style="margin: 0 0 6px">句子分类（可多选）：</p>
+        <div class="cat-grid">
+          <button
+            v-for="cat in HITOKOTO_CATS"
+            :key="cat.code"
+            class="gmini"
+            :class="{ on: quoteCats.includes(cat.code) }"
+            @click="toggleQuoteCat(cat.code)"
+          >{{ cat.label }}</button>
+        </div>
+        <div class="row" style="margin-top: 10px; align-items: center">
+          <span class="foot-note">最大长度（10–100 字）：</span>
+          <input v-model.number="quoteMaxLength" class="ginput" type="number" min="10" max="100" style="width: 90px" />
+        </div>
+      </div>
+      <button class="gbtn primary" style="margin-top: 12px" @click="saveQuoteConfig">保存寄语设置</button>
+
       <h3 class="sec-title" style="margin-top: 20px">家长视图（只读链接）</h3>
       <p class="foot-note" style="margin: 0 0 8px">家长打开链接可查看脱敏后的今日作业/课程/出勤与本周汇总（学生姓名仅显示姓氏和拼音首字母）。聊天消息不对家长开放。</p>
       <div v-if="parentQr" class="parent-box">
@@ -661,11 +739,17 @@ onMounted(() => {
 }
 .row {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   margin-top: 8px;
 }
+.row .gbtn,
+.row .gmini {
+  flex: none;
+}
 .row .gselect {
-  min-width: 140px;
+  min-width: 120px;
+  max-width: 100%;
 }
 .flabel {
   display: block;
@@ -673,9 +757,6 @@ onMounted(() => {
   color: var(--muted);
   font-weight: 600;
   margin: 10px 0 5px;
-}
-.gmini.danger {
-  color: var(--absent);
 }
 .code {
   letter-spacing: 1.5px;
@@ -737,5 +818,24 @@ onMounted(() => {
   border-radius: 10px;
   font-size: 13px;
   flex-wrap: wrap;
+}
+.parent-box {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.cat-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.parent-qr {
+  width: min(160px, 40vw);
+  height: auto;
+  border-radius: 12px;
+  background: #fff;
+  padding: 6px;
+  flex: none;
 }
 </style>

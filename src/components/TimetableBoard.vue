@@ -294,7 +294,8 @@ async function exportCses() {
 }
 .row .ginput:nth-of-type(2) {
   width: 160px;
-  flex: none;
+  min-width: 96px;
+  flex: 1.2;
 }
 .acts {
   margin-top: 14px;

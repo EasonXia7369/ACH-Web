@@ -26,6 +26,8 @@ export interface ClassInfo {
   student_pass_hash: string | null
   subjects: string[]
   legacy_sync_code?: string | null
+  /** 每日寄语来源配置（JSON 字符串：{ source: 'builtin' } 或 { source: 'hitokoto', cats, max_length }） */
+  quote_config?: string | null
 }
 
 export const useClassStore = defineStore('class', () => {

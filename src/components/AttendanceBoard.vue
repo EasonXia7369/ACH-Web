@@ -174,6 +174,7 @@ async function saveEntry(status: string, note: string) {
   </div>
 
   <div class="card tablecard">
+    <div class="table-scroll">
     <table class="roster">
       <thead>
         <tr>
@@ -200,6 +201,7 @@ async function saveEntry(status: string, note: string) {
         </tr>
       </tbody>
     </table>
+    </div>
   </div>
   <p class="foot-note">
     点格子标记：空白✓＝出勤，⭕请假、□迟到、×旷课、△违纪；标记后可顺手写备注。
@@ -273,12 +275,13 @@ async function saveEntry(status: string, note: string) {
 }
 .datewrap {
   position: relative;
-  flex: 1;
-  min-width: 0;
+  flex: 1 1 auto;
+  min-width: 132px;
 }
 .datewrap span {
   display: block;
   text-align: center;
+  white-space: nowrap;
   font-weight: 700;
   font-size: 14.5px;
   padding: 8px 4px;

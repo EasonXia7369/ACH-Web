@@ -65,13 +65,16 @@ async function submitApply() {
       <span style="font-size: 13.5px; font-weight: 700">今日登记</span>
       <span class="foot-note" style="margin-left: 8px">点格子标记出勤状态，登记后会记录为「学生」操作。</span>
     </div>
-    <button class="gbtn" @click="showApply = true">申请请假</button>
+    <button class="gbtn" :disabled="!store.current" @click="showApply = true">申请请假</button>
   </div>
 
-  <AttendanceBoard v-if="sub === 'daily'" :class-id="store.current!.id" />
-  <StatsBoard v-else-if="sub === 'stats'" :class-id="store.current!.id" />
-  <LeavesBoard v-else-if="sub === 'leaves'" :class-id="store.current!.id" />
-  <WeeklyReportBoard v-else :class-id="store.current!.id" />
+  <template v-if="store.current">
+    <AttendanceBoard v-if="sub === 'daily'" :class-id="store.current.id" />
+    <StatsBoard v-else-if="sub === 'stats'" :class-id="store.current.id" />
+    <LeavesBoard v-else-if="sub === 'leaves'" :class-id="store.current.id" />
+    <WeeklyReportBoard v-else :class-id="store.current.id" />
+  </template>
+  <p v-else class="foot-note">正在加载班级信息…</p>
 
   <!-- 学生请假申请 -->
   <Teleport to="body">
@@ -85,7 +88,7 @@ async function submitApply() {
             {{ s.name }}
           </option>
         </select>
-        <div class="row" style="margin-top: 10px">
+        <div class="row" style="margin-top: 10px; flex-wrap: wrap">
           <input v-model="applyFrom" class="ginput" type="date" />
           <span class="foot-note">至</span>
           <input v-model="applyTo" class="ginput" type="date" />

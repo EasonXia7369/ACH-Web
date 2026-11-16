@@ -316,7 +316,11 @@ async function confirmImport() {
 }
 .addrow {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
+}
+.addrow .gbtn {
+  flex: none;
 }
 .searchrow {
   display: flex;
@@ -331,7 +335,8 @@ async function confirmImport() {
 .stu-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 6px 8px;
   padding: 7px 4px;
   border-bottom: 1px solid var(--line-soft);
 }
@@ -365,18 +370,10 @@ async function confirmImport() {
   padding: 2px 8px;
   border-radius: 999px;
 }
-.gmini.danger {
-  color: var(--absent);
-}
 .mode-row {
   display: flex;
   gap: 6px;
   margin-bottom: 4px;
-}
-.mode-row .gmini.on {
-  background: var(--primary-soft);
-  color: var(--primary);
-  border-color: var(--primary);
 }
 .preview {
   margin-top: 12px;

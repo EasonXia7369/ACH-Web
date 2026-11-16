@@ -278,8 +278,7 @@ function playVoice(m: ChatMessage) {
               @click="deleteMsg(m)"
             >删除</button>
           </div>
-          <template v-if="m.kind === 'text'">{{ m.body }}  <div v-if="toastMsg" class="gtoast">{{ toastMsg }}</div>
-</template>
+          <template v-if="m.kind === 'text'">{{ m.body }}</template>
           <template v-else-if="m.kind === 'image'">
             <img :src="chat.mediaSrc(m)" class="chat-img" loading="lazy" @click="previewImage = chat.mediaSrc(m)" />
           </template>
@@ -335,6 +334,7 @@ function playVoice(m: ChatMessage) {
     </div>
     <p v-if="recording" class="foot-note rec-hint">● 录音中 {{ recordSeconds }}s / 60s —— 点麦克风结束并发送</p>
     <p v-if="error || recordError" class="err">{{ error || recordError }}</p>
+    <div v-if="toastMsg" class="gtoast">{{ toastMsg }}</div>
   </div>
 
   <!-- 图片全屏预览 -->
@@ -388,8 +388,6 @@ function playVoice(m: ChatMessage) {
 }
 .hint {
   margin-left: auto;
-  font-size: 11.5px;
-  color: var(--faint);
 }
 .chat-list {
   flex: 1;

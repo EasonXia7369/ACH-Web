@@ -68,9 +68,61 @@ const QUOTES = [
   { text: '千淘万漉虽辛苦，吹尽狂沙始到金。', author: '刘禹锡《浪淘沙》' },
   { text: '劝君莫惜金缕衣，劝君惜取少年时。', author: '杜秋娘《金缕衣》' },
 ]
-const quote = computed(
+const builtinQuote = computed(
   () => QUOTES[Math.floor((now.value.valueOf() / 86400000) * 2654435761) % QUOTES.length],
 )
+
+/* 一言接口：班级配置了 hitokoto 来源时，按分类拉取，每天一条（本机缓存） */
+const HITOKOTO_URL = 'https://v1.hitokoto.cn/'
+const hitokoto = ref<{ text: string; author: string } | null>(null)
+const quote = computed(() => hitokoto.value ?? builtinQuote.value)
+
+async function loadQuote() {
+  hitokoto.value = null
+  let cfg: any = store.current?.quote_config
+  if (typeof cfg === 'string') {
+    try {
+      cfg = JSON.parse(cfg)
+    } catch {
+      cfg = null
+    }
+  }
+  if (!cfg || cfg.source !== 'hitokoto' || !store.current) return
+  const fingerprint = (cfg.cats ?? []).slice().sort().join('') + '-' + (cfg.max_length ?? 30)
+  const cacheKey = `ark-hitokoto-${store.current.id}-${today}-${fingerprint}`
+  // 清掉旧日期/旧配置的缓存
+  for (let i = localStorage.length - 1; i >= 0; i--) {
+    const k = localStorage.key(i)
+    if (k?.startsWith('ark-hitokoto-') && k !== cacheKey) localStorage.removeItem(k)
+  }
+  const cached = localStorage.getItem(cacheKey)
+  if (cached) {
+    try {
+      hitokoto.value = JSON.parse(cached)
+      return
+    } catch {
+      localStorage.removeItem(cacheKey)
+    }
+  }
+  try {
+    const params = new URLSearchParams()
+    for (const cat of cfg.cats ?? []) params.append('c', cat)
+    params.set('max_length', String(cfg.max_length ?? 30))
+    params.set('encode', 'json')
+    const res = await fetch(`${HITOKOTO_URL}?${params}`)
+    if (!res.ok) return
+    const j = await res.json()
+    const q = {
+      text: String(j.hitokoto ?? ''),
+      author: j.from ? `${j.from_who ? j.from_who + ' ' : ''}「${j.from}」` : (j.from_who ?? '一言'),
+    }
+    if (!q.text) return
+    hitokoto.value = q
+    localStorage.setItem(cacheKey, JSON.stringify(q))
+  } catch {
+    /* 拉取失败静默回退内置诗词 */
+  }
+}
 
 /* ---------- 数据 ---------- */
 const today = dk()
@@ -152,6 +204,8 @@ async function load() {
 }
 
 watch(() => store.current?.id, load, { immediate: true })
+// 班级或寄语配置变化 → 重取一言（内置来源会被置空回退）
+watch(() => [store.current?.id, store.current?.quote_config], loadQuote, { immediate: true })
 // 其他设备变更了作业/考勤/值日 → 自动重拉
 watch(() => chat.refreshTick, () => load())
 
@@ -165,6 +219,18 @@ const taskOf = (subject: string) => tasks.value.find((t) => t.subject === subjec
       .filter((t): t is NonNullable<typeof t> => !!t),
   )
   const emptySubjects = computed(() => (store.current?.subjects ?? []).filter((s) => !taskOf(s)))
+
+  // 作业内容字号调节（一体机可自由调，记忆在本机）
+  const HW_FONT_KEY = 'ark-hw-font'
+  const hwFont = ref<number>(Number(localStorage.getItem(HW_FONT_KEY)) || 20)
+  function setHwFont(delta: number) {
+    hwFont.value = Math.min(40, Math.max(14, hwFont.value + delta))
+    localStorage.setItem(HW_FONT_KEY, String(hwFont.value))
+  }
+  function resetHwFont() {
+    hwFont.value = 20
+    localStorage.removeItem(HW_FONT_KEY)
+  }
 
 // 编辑器（老师/值日生均可）
   const editor = ref<{ subject: string; content: string; isNew: boolean } | null>(null)
@@ -284,9 +350,17 @@ onMounted(() => {
       <div class="glass wall-card">
         <div class="sec-head">
           <h2><Icon name="homework" :size="17" /> 今日作业</h2>
-          <span class="hint">{{ isStudent ? '作业实时展示，点卡片上的按钮登记未交或修改' : '布置后自动放大展示；点卡片按钮登记未交或修改' }}</span>
+          <div class="sec-head-r" style="display: flex; align-items: center; gap: 8px">
+            <span class="hint">{{ isStudent ? '作业实时展示，点卡片上的按钮登记未交或修改' : '布置后自动放大展示；点卡片按钮登记未交或修改' }}</span>
+            <span class="font-adjust" title="调整作业内容字号">
+              <button class="gmini" @click="setHwFont(-2)">A-</button>
+              <span class="font-val">{{ hwFont }}px</span>
+              <button class="gmini" @click="setHwFont(2)">A+</button>
+              <button v-if="hwFont !== 20" class="gmini" @click="resetHwFont">重置</button>
+            </span>
+          </div>
         </div>
-        <div class="wall">
+        <div class="wall" :style="{ '--hw-fs': hwFont + 'px' }">
           <div v-for="t in filledTasks" :key="t.subject" class="subject-card big">
             <div class="big-head">
               <span class="subject-name">{{ t.subject }}</span>
@@ -568,7 +642,8 @@ onMounted(() => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 8px 12px;
   margin-bottom: 14px;
 }
 .sec-head h2 {
@@ -580,10 +655,6 @@ onMounted(() => {
   align-items: center;
   gap: 7px;
   color: var(--text);
-}
-.hint {
-  font-size: 11.5px;
-  color: var(--faint);
 }
 .wall {
   display: grid;
@@ -606,20 +677,37 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 6px;
+  margin-bottom: 2px;
 }
 .big-acts {
   display: flex;
   gap: 6px;
 }
+.big-head .subject-name {
+  font-size: 13px;
+  color: var(--muted);
+}
+.font-adjust {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+.font-val {
+  font-size: 11.5px;
+  color: var(--faint);
+  min-width: 34px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
 .subject-content.big {
-  font-size: 17px;
-  line-height: 1.8;
+  font-size: var(--hw-fs, 20px);
+  line-height: 1.7;
   color: var(--text);
   font-weight: 500;
   white-space: pre-wrap;
   word-break: break-word;
-  max-height: 220px;
+  max-height: 250px;
   overflow-y: auto;
 }
 .empty-row {
@@ -850,6 +938,10 @@ onMounted(() => {
   }
   .att-grid {
     grid-template-columns: repeat(3, 1fr);
+  }
+  /* 窄屏说明文字让位给标题与字号调节器 */
+  .sec-head .hint {
+    display: none;
   }
 }
 </style>

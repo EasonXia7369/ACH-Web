@@ -58,6 +58,28 @@
   background: var(--primary-dark);
 }
 
+/* ghost：无底无框，悬停浮起（对应 shadcn ghost） */
+.gbtn.ghost {
+  background: transparent;
+  border-color: transparent;
+}
+
+.gbtn.ghost:hover {
+  background: var(--field);
+}
+
+/* destructive：实底红，仅用于确认对话框里的不可逆操作 */
+.gbtn.destructive {
+  background: var(--absent);
+  border-color: transparent;
+  color: #fff;
+  font-weight: 600;
+}
+
+.gbtn.destructive:hover {
+  filter: brightness(1.08);
+}
+
 .gbtn.danger {
   color: var(--absent);
 }
@@ -87,11 +109,33 @@
   font-weight: 500;
   transition:
     background var(--dur-fast) var(--ease-spring),
-    color var(--dur-fast) var(--ease-spring);
+    color var(--dur-fast) var(--ease-spring),
+    transform var(--dur-fast) var(--ease-spring);
 }
 
 .gmini:hover {
   background: var(--field-hover);
+}
+
+.gmini:active {
+  transform: scale(0.96);
+}
+
+.gmini:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* 危险动作（删除类）：红色文字，与 .gbtn.danger 同语义 */
+.gmini.danger {
+  color: var(--absent);
+}
+
+/* 选中态（模式切换等，对应 shadcn secondary 选中语义） */
+.gmini.on {
+  background: var(--primary-soft);
+  border-color: transparent;
+  color: var(--primary);
 }
 
 /* ---------- 输入 ---------- */
@@ -106,6 +150,7 @@
   padding: 9px 11px;
   border-radius: var(--radius-sm);
   outline: none;
+  max-width: 100%;
   transition:
     border-color var(--dur-fast) var(--ease-spring),
     background var(--dur-fast) var(--ease-spring),
@@ -172,6 +217,12 @@
 }
 
 /* ---------- 表格 ---------- */
+/* 手机端横向滚动容器：宽表包一层，避免撑破卡片 */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .gtable {
   width: 100%;
   border-collapse: collapse;
@@ -253,6 +304,15 @@
   border-radius: 999px;
   z-index: 120;
   box-shadow: var(--shadow);
+  max-width: calc(100vw - 32px);
+  text-align: center;
+}
+
+/* 手机端：避开底部导航条 */
+@media (max-width: 860px) {
+  .gtoast {
+    bottom: calc(84px + env(safe-area-inset-bottom));
+  }
 }
 
 /* 表格数字统一等宽（统计/名单可读性） */
@@ -261,6 +321,21 @@ table {
 }
 
 /* ---------- 文本工具 ---------- */
+/* 区块标题行：窄屏自动换行，避免右侧说明/操作被挤出 */
+.sec-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-bottom: 10px;
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--faint);
+}
+
 .sec-title {
   margin: 0 0 8px;
   font-size: 14px;

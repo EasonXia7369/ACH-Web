@@ -158,7 +158,7 @@ const weeklyTotals = computed(() => {
 .brand-en {
   font-size: 10px;
   letter-spacing: 0.3em;
-  color: #a1a1a6;
+  color: var(--faint);
 }
 h1 {
   margin: 0;
@@ -168,20 +168,20 @@ h1 {
 }
 .date-line {
   margin: 6px 0 0;
-  color: #6e6e73;
+  color: var(--muted);
   font-size: 14px;
 }
 .privacy-note {
   margin: 10px 0 0;
   font-size: 12px;
-  color: #a1a1a6;
-  background: #fff;
+  color: var(--faint);
+  background: var(--panel-strong);
   border: 1px solid rgba(0, 0, 0, 0.06);
   border-radius: 10px;
   padding: 8px 12px;
 }
 .card {
-  background: #fff;
+  background: var(--panel-strong);
   border: 1px solid rgba(0, 0, 0, 0.07);
   border-radius: 16px;
   padding: 18px 20px;
@@ -205,7 +205,7 @@ h2 {
 }
 .subj {
   font-weight: 600;
-  color: #007aff;
+  color: var(--primary);
   flex: none;
   width: 56px;
 }
@@ -222,21 +222,21 @@ h2 {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #f5f5f7;
+  background: var(--field);
   border-radius: 10px;
   padding: 6px 12px;
   font-size: 13.5px;
 }
 .tt-p {
-  background: #007aff;
-  color: #fff;
+  background: var(--primary);
+  color: var(--on-primary);
   border-radius: 6px;
   font-size: 11px;
   font-weight: 700;
   padding: 1px 7px;
 }
 .tt-teacher {
-  color: #86868b;
+  color: var(--muted);
   font-size: 12px;
 }
 .att-list {
@@ -250,29 +250,29 @@ h2 {
   font-size: 13.5px;
   padding: 8px 12px;
   border-radius: 10px;
-  background: #f5f5f7;
+  background: var(--field);
   flex-wrap: wrap;
 }
 .att-student {
   font-weight: 600;
 }
 .st-present {
-  color: #34c759;
+  color: var(--present);
 }
 .st-leave {
-  color: #ff9500;
+  color: var(--leave);
 }
 .st-late {
-  color: #007aff;
+  color: var(--primary);
 }
 .st-absent {
-  color: #ff3b30;
+  color: var(--absent);
 }
 .st-violate {
-  color: #af52de;
+  color: var(--violate);
 }
 .att-note {
-  color: #86868b;
+  color: var(--muted);
   font-size: 12px;
 }
 .week-grid {
@@ -284,7 +284,7 @@ h2 {
   display: flex;
   flex-direction: column;
   align-items: center;
-  background: #f5f5f7;
+  background: var(--field);
   border-radius: 12px;
   padding: 12px 6px;
 }
@@ -294,36 +294,36 @@ h2 {
 }
 .week-item span {
   font-size: 11.5px;
-  color: #6e6e73;
+  color: var(--muted);
 }
 .n-leave {
-  color: #ff9500;
+  color: var(--leave);
 }
 .n-late {
-  color: #007aff;
+  color: var(--primary);
 }
 .n-absent {
-  color: #ff3b30;
+  color: var(--absent);
 }
 .n-violate {
-  color: #af52de;
+  color: var(--violate);
 }
 .none {
-  color: #a1a1a6;
+  color: var(--faint);
   font-size: 13px;
   margin: 4px 0 0;
 }
 .state {
   text-align: center;
   padding: 48px 0;
-  color: #6e6e73;
+  color: var(--muted);
 }
 .err {
-  color: #ff3b30;
+  color: var(--absent);
 }
 .foot {
   text-align: center;
-  color: #a1a1a6;
+  color: var(--faint);
   font-size: 12px;
   margin-top: 20px;
 }
