@@ -18,3 +18,29 @@ const app = createApp(App).use(createPinia()).use(router)
 router.isReady().then(() => {
   app.mount('#app')
 })
+
+/* PWA 自更新（仅生产构建）：
+ * sw.js 本身已带 skipWaiting + clientsClaim + cleanupOutdatedCaches，这里补齐设备侧闭环——
+ * 1) 定期 + 回前台时主动检查更新：长期开着的大板/一体机不用任何操作即可拿到新版；
+ * 2) 新 SW 接管（controllerchange）时整页刷新：否则旧页面之后懒加载的旧分片
+ *    可能已被清理而 404 白屏（这正是之前要清站点数据才能恢复的原因）。
+ * updateViaCache: 'none' 绕过 HTTP 缓存检查 sw.js（Cloudflare Pages 给它的 TTL 有 4 小时）。 */
+if (import.meta.env.PROD && 'serviceWorker' in navigator) {
+  const swReady = navigator.serviceWorker.register('/sw.js', {
+    scope: '/',
+    updateViaCache: 'none',
+  })
+  if (navigator.serviceWorker.controller) {
+    let reloading = false
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloading) return
+      reloading = true
+      location.reload()
+    })
+  }
+  const checkUpdate = () => swReady.then((reg) => reg.update()).catch(() => {})
+  setInterval(checkUpdate, 30 * 60 * 1000)
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) checkUpdate()
+  })
+}

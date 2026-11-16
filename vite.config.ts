@@ -8,7 +8,9 @@ export default defineConfig({
     vue(),
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'auto',
+      // 注册逻辑移到 main.ts 手写（需加定期检查 + controllerchange 自动刷新，
+      // 自动注入的 registerSW.js 只有裸注册，长期开着的设备拿不到新版）
+      injectRegister: null,
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         name: '方舟班级中心 · Ark Class Hub',
