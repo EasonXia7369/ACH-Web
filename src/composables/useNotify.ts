@@ -1,12 +1,18 @@
 import { ref } from 'vue'
+import { isDesktop } from '@/utils/platform'
 
 /**
- * 页面内 + 浏览器通知（v1）。
- * - 浏览器 Notification：页面在后台时弹系统通知（需用户授权一次）
+ * 页面内 + 系统通知（v1）。
+ * - Web：浏览器 Notification（页面在后台时弹系统通知，需用户授权一次）
+ * - Electron 桌面端：同用 HTML5 Notification（Chromium 直接渲染为系统通知，无需授权弹窗）
  * - 提示音：WebAudio 合成短音，不依赖音频文件
  */
 const permission = ref<NotificationPermission | 'unsupported'>(
-  typeof Notification === 'undefined' ? 'unsupported' : Notification.permission,
+  isDesktop
+    ? 'granted'
+    : typeof Notification === 'undefined'
+      ? 'unsupported'
+      : Notification.permission,
 )
 
 export function useNotify() {
@@ -14,12 +20,13 @@ export function useNotify() {
     if (permission.value === 'unsupported') return false
     if (permission.value === 'granted') return true
     if (permission.value === 'denied') return false
+    if (isDesktop) return true
     const res = await Notification.requestPermission()
     permission.value = res
     return res === 'granted'
   }
 
-  function showNotification(title: string, body: string): void {
+  async function showNotification(title: string, body: string): Promise<void> {
     if (permission.value !== 'granted') return
     if (document.visibilityState === 'visible') return // 可见时页面内已有弹窗
     try {

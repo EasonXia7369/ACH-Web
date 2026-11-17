@@ -4,6 +4,7 @@ import dayjs from 'dayjs'
 import { get } from '@/api'
 import { useClassStore } from '@/stores/class'
 import { exportXlsx } from '@/utils/xlsx'
+import { saveFile } from '@/utils/platform'
 import { weekdayCn } from '@/utils/dates'
 import Icon from '@/components/Icon.vue'
 
@@ -176,16 +177,7 @@ async function exportImage() {
   const blob: Blob = await new Promise((resolve) =>
     canvas.toBlob((b) => resolve(b!), 'image/png'),
   )
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `周报_${store.current?.name}_${from.value}.png`
-  document.body.appendChild(a)
-  a.click()
-  setTimeout(() => {
-    URL.revokeObjectURL(url)
-    a.remove()
-  }, 3000)
+  await saveFile(`周报_${store.current?.name}_${from.value}.png`, blob)
 }
 </script>
 

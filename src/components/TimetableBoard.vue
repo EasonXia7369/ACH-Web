@@ -2,6 +2,7 @@
 import { computed, ref, watch } from 'vue'
 import { load as yamlLoad, dump as yamlDump } from 'js-yaml'
 import { get, put } from '@/api'
+import { saveFile } from '@/utils/platform'
 import { useClassStore } from '@/stores/class'
 import Icon from '@/components/Icon.vue'
 
@@ -182,15 +183,7 @@ async function exportCses() {
 
     const doc = { version: 1, subjects, schedules }
     const blob = new Blob(['# 班级中心导出 · CSES v1\n' + yamlDump(doc)], { type: 'text/yaml' })
-    const a = document.createElement('a')
-    a.href = URL.createObjectURL(blob)
-    a.download = `课表_${store.current?.name ?? 'class'}.yaml`
-    document.body.appendChild(a)
-    a.click()
-    setTimeout(() => {
-      URL.revokeObjectURL(a.href)
-      a.remove()
-    }, 3000)
+    await saveFile(`课表_${store.current?.name ?? 'class'}.yaml`, blob)
     csesNote.value = '已导出 CSES YAML（时间按第 1 节 08:00、每节 40 分钟推算）'
   } catch (err: any) {
     csesNote.value = '导出失败：' + (err.message ?? '')
