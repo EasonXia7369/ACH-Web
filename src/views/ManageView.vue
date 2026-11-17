@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { get, post, put, del } from '@/api'
+import { saveFile } from '@/utils/platform'
 import { useAuthStore } from '@/stores/auth'
 import { useClassStore } from '@/stores/class'
 import StudentsManager from '@/components/StudentsManager.vue'
@@ -175,6 +176,7 @@ async function initSettings() {
   quoteSource.value = qc?.source === 'hitokoto' ? 'hitokoto' : 'builtin'
   quoteCats.value = Array.isArray(qc?.cats) ? [...qc.cats] : ['i', 'd']
   quoteMaxLength.value = Number(qc?.max_length) || 30
+  quoteRefresh.value = Number(qc?.refresh_minutes) || 0
   if (store.current) {
     try {
       const qp = await get<{ phrases: string[] }>('/api/classes/' + store.current.id + '/quick-phrases')
@@ -202,6 +204,16 @@ const HITOKOTO_CATS: Array<{ code: string; label: string }> = [
 const quoteSource = ref<'builtin' | 'hitokoto'>('builtin')
 const quoteCats = ref<string[]>(['i', 'd'])
 const quoteMaxLength = ref(30)
+/** 一言切换周期（分钟），0 = 每天一条 */
+const quoteRefresh = ref(0)
+const QUOTE_REFRESH_OPTIONS = [
+  { value: 0, label: '每天一条' },
+  { value: 10, label: '每 10 分钟' },
+  { value: 30, label: '每 30 分钟' },
+  { value: 45, label: '每 45 分钟（一节课）' },
+  { value: 60, label: '每 1 小时' },
+  { value: 120, label: '每 2 小时' },
+]
 
 function toggleQuoteCat(code: string) {
   const i = quoteCats.value.indexOf(code)
@@ -219,6 +231,7 @@ async function saveQuoteConfig() {
       source: quoteSource.value,
       cats: quoteCats.value,
       max_length: quoteMaxLength.value,
+      refresh_minutes: quoteRefresh.value,
     })
     if (store.current) store.current.quote_config = JSON.stringify(res.config)
     toast(quoteSource.value === 'hitokoto' ? '已切换为一言接口，回到大板即生效' : '已切换为内置诗词')
@@ -268,15 +281,7 @@ async function downloadBackup() {
   const cid = store.current!.id
   const data = await get<any>(`/api/classes/${cid}/backup`)
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob)
-  a.download = `班级备份_${data.class.name}_${new Date().toISOString().slice(0, 10)}.json`
-  document.body.appendChild(a)
-  a.click()
-  setTimeout(() => {
-    URL.revokeObjectURL(a.href)
-    a.remove()
-  }, 3000)
+  await saveFile(`班级备份_${data.class.name}_${new Date().toISOString().slice(0, 10)}.json`, blob)
   toast('备份已下载')
 }
 
@@ -539,7 +544,7 @@ onMounted(() => {
       </div>
 
       <h3 class="sec-title" style="margin-top: 20px">每日寄语来源</h3>
-      <p class="foot-note" style="margin: 0 0 8px">大板寄语卡的句子来源。内置为精选古诗词（按日期轮换）；一言接口来自 hitokoto.cn，每天一条。</p>
+      <p class="foot-note" style="margin: 0 0 8px">大板寄语卡的句子来源。内置为精选古诗词（按日期轮换）；一言接口来自 hitokoto.cn，切换周期可调。</p>
       <div class="gseg">
         <button :class="{ on: quoteSource === 'builtin' }" @click="quoteSource = 'builtin'">内置诗词</button>
         <button :class="{ on: quoteSource === 'hitokoto' }" @click="quoteSource = 'hitokoto'">一言接口</button>
@@ -558,6 +563,12 @@ onMounted(() => {
         <div class="row" style="margin-top: 10px; align-items: center">
           <span class="foot-note">最大长度（10–100 字）：</span>
           <input v-model.number="quoteMaxLength" class="ginput" type="number" min="10" max="100" style="width: 90px" />
+        </div>
+        <div class="row" style="margin-top: 10px; align-items: center">
+          <span class="foot-note">切换周期：</span>
+          <select v-model.number="quoteRefresh" class="gselect" style="width: auto">
+            <option v-for="opt in QUOTE_REFRESH_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+          </select>
         </div>
       </div>
       <button class="gbtn primary" style="margin-top: 12px" @click="saveQuoteConfig">保存寄语设置</button>

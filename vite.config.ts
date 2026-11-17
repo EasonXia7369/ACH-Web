@@ -29,6 +29,8 @@ export default defineConfig({
         ],
       },
       workbox: {
+        // Web Push 事件处理（public/push-sw.js：push / notificationclick）
+        importScripts: ['/push-sw.js'],
         // 接口请求走网络优先，失败回退缓存的最后一次结果（离线可看最近数据）
         navigateFallback: '/index.html',
         runtimeCaching: [
@@ -66,6 +68,7 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8787',
         changeOrigin: true,
+        ws: true,
       },
     },
   },

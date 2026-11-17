@@ -6,6 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useClassStore } from '@/stores/class'
 import { useChatStore } from '@/stores/chat'
 import { useNotify } from '@/composables/useNotify'
+import { isDesktop, desktopBridge } from '@/utils/platform'
 import Icon from '@/components/Icon.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
 
@@ -18,6 +19,49 @@ const notify = useNotify()
 
 const isDark = useDark({ storageKey: 'ark-theme' })
 const toggleDark = useToggle(isDark)
+
+/* 桌面端设置（仅桌面壳显示）：全屏（大板/一体机用）/ 窗口置顶 / 开机自启 */
+const deskPop = ref(false)
+const deskFullscreen = ref(false)
+const deskOnTop = ref(false)
+const deskAutostart = ref(false)
+
+async function initDesktopState() {
+  try {
+    const s = await desktopBridge!.windowState()
+    deskFullscreen.value = s.fullscreen
+    deskOnTop.value = s.alwaysOnTop
+    deskAutostart.value = s.autostart
+  } catch {
+    /* 状态读取失败不阻塞面板 */
+  }
+}
+async function setFullscreen(on: boolean) {
+  await desktopBridge!.setFullscreen(on)
+  deskFullscreen.value = on
+}
+async function setOnTop(on: boolean) {
+  await desktopBridge!.setAlwaysOnTop(on)
+  deskOnTop.value = on
+}
+async function setAutostart(on: boolean) {
+  deskAutostart.value = await desktopBridge!.setAutostart(on)
+}
+function onDeskKeydown(e: KeyboardEvent) {
+  if (e.key === 'F11') {
+    e.preventDefault()
+    setFullscreen(!deskFullscreen.value)
+  }
+}
+watch(deskPop, (open) => {
+  if (open) initDesktopState()
+})
+onMounted(() => {
+  if (isDesktop) window.addEventListener('keydown', onDeskKeydown)
+})
+onBeforeUnmount(() => {
+  if (isDesktop) window.removeEventListener('keydown', onDeskKeydown)
+})
 
 const NAV = [
   { to: '/board', name: '大板', icon: 'board' },
@@ -111,6 +155,10 @@ onBeforeUnmount(() => chat.reset())
         </RouterLink>
       </nav>
       <div class="rail-foot">
+        <button v-if="isDesktop" class="rail-item" title="桌面设置" @click="deskPop = !deskPop">
+          <Icon name="manage" :size="20" />
+          <span>桌面</span>
+        </button>
         <button class="rail-item" :title="isDark ? '切换浅色' : '切换深色'" @click="toggleDark()">
           <Icon :name="isDark ? 'sun' : 'moon'" :size="20" />
           <span>{{ isDark ? '浅色' : '深色' }}</span>
@@ -168,6 +216,37 @@ onBeforeUnmount(() => chat.reset())
         <span>{{ item.name }}</span>
       </RouterLink>
     </nav>
+
+    <!-- 桌面端设置弹层（仅 Tauri 桌面构建出现） -->
+    <Teleport to="body">
+      <div v-if="deskPop" class="desk-overlay" @click.self="deskPop = false">
+        <div class="desk-pop glass-strong">
+          <div class="desk-pop-title">
+            <Icon name="manage" :size="15" />
+            桌面设置
+            <button class="gbtn icon close" @click="deskPop = false"><Icon name="x" :size="14" /></button>
+          </div>
+          <div class="desk-row">
+            <span>全屏模式<small>F11 或点击切换，大板/一体机用</small></span>
+            <button class="gbtn gmini" :class="{ primary: deskFullscreen }" @click="setFullscreen(!deskFullscreen)">
+              {{ deskFullscreen ? '已开启' : '已关闭' }}
+            </button>
+          </div>
+          <div class="desk-row">
+            <span>窗口置顶<small>始终浮在其他窗口上方</small></span>
+            <button class="gbtn gmini" :class="{ primary: deskOnTop }" @click="setOnTop(!deskOnTop)">
+              {{ deskOnTop ? '已开启' : '已关闭' }}
+            </button>
+          </div>
+          <div class="desk-row">
+            <span>开机自启<small>开机后直接进入班级中心</small></span>
+            <button class="gbtn gmini" :class="{ primary: deskAutostart }" @click="setAutostart(!deskAutostart)">
+              {{ deskAutostart ? '已开启' : '已关闭' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- 离线摘要：上线补拉后发现的离线新消息 -->
     <Teleport to="body">
@@ -269,6 +348,7 @@ onBeforeUnmount(() => chat.reset())
 }
 .msg-pop {
   width: min(360px, 92vw);
+  padding: 14px 16px;
   pointer-events: auto;
   animation: pop-in 0.25s ease;
 }
@@ -538,5 +618,55 @@ onBeforeUnmount(() => chat.reset())
 .offline-pop {
   pointer-events: auto;
   animation: pop-in var(--dur-med) var(--ease-spring);
+}
+
+/* 桌面设置弹层 */
+.desk-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 118;
+  display: flex;
+  align-items: flex-end;
+  justify-content: flex-start;
+  padding: 16px;
+  pointer-events: auto;
+}
+.desk-pop {
+  position: fixed;
+  left: 96px;
+  bottom: 20px;
+  width: min(300px, 92vw);
+  padding: 14px;
+  animation: pop-in 0.2s ease;
+}
+.desk-pop-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+  font-size: 13.5px;
+  color: var(--primary);
+  margin-bottom: 10px;
+}
+.desk-pop-title .close {
+  margin-left: auto;
+}
+.desk-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 0;
+}
+.desk-row > span {
+  display: flex;
+  flex-direction: column;
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.desk-row small {
+  font-weight: 400;
+  font-size: 11px;
+  color: var(--muted);
 }
 </style>

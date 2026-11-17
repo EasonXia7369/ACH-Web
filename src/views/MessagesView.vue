@@ -6,12 +6,25 @@ import { useAuthStore } from '@/stores/auth'
 import { useClassStore } from '@/stores/class'
 import { useChatStore, type ChatMessage } from '@/stores/chat'
 import { useNotify } from '@/composables/useNotify'
+import { usePush } from '@/composables/usePush'
 import Icon from '@/components/Icon.vue'
 
 const auth = useAuthStore()
 const store = useClassStore()
 const chat = useChatStore()
 const notify = useNotify()
+const {
+  supported: pushSupported,
+  subscribed: pushSubscribed,
+  busy: pushBusy,
+  serverEnabled: pushServerEnabled,
+  error: pushError,
+  init: initPush,
+  enable: enablePush,
+  disable: disablePush,
+} = usePush()
+/** 推送开关入口：仅网页端（非桌面壳）且服务端已配置 VAPID 时显示 */
+const pushVisible = computed(() => pushSupported && pushServerEnabled.value)
 
 const QUICK_PHRASES = ['作业收齐了', '请求老师来教室', '收到，请指示', '一切正常', '请查看大板']
 const quickPhrases = ref<string[]>(QUICK_PHRASES)
@@ -60,6 +73,7 @@ function onIncoming(m: ChatMessage) {
 
 onMounted(async () => {
   await notify.requestPermission().catch(() => {})
+  initPush().catch(() => {})
   if (store.current) {
     try {
       const res = await get<{ phrases: string[] }>(`/api/classes/${store.current.id}/quick-phrases`)
@@ -234,6 +248,19 @@ function toast(msg: string) {
   toastMsg.value = msg
   setTimeout(() => (toastMsg.value = ''), 2600)
 }
+
+/** 推送通知开关：开启走权限→订阅→上报流程；关闭取消订阅 */
+async function togglePush() {
+  if (pushBusy.value) return
+  if (pushSubscribed.value) {
+    await disablePush()
+    toast('推送通知已关闭')
+  } else {
+    const ok = await enablePush()
+    if (ok) toast('推送通知已开启，关掉页面也能收到提醒')
+    else toast(pushError.value || '开启推送失败')
+  }
+}
 const deletingId = ref<number | null>(null)
 async function deleteMsg(m: ChatMessage) {
   if (!confirm('删除这条消息？')) return
@@ -257,6 +284,16 @@ function playVoice(m: ChatMessage) {
         {{ chat.conn === 'open' ? '实时连接' : chat.conn === 'retrying' ? '重连中…' : chat.conn === 'connecting' ? '连接中…' : '未连接' }}
       </span>
       <span class="hint">{{ isStudent ? '发消息给老师' : '发消息到教室大屏' }}</span>
+      <button
+        v-if="pushVisible"
+        class="gbtn icon push-toggle"
+        :class="{ 'popup-on': pushSubscribed }"
+        :disabled="pushBusy"
+        :title="pushSubscribed ? '推送通知已开启，点击关闭' : '开启推送通知（关掉页面也能收到消息和考勤/作业提醒）'"
+        @click="togglePush"
+      >
+        <Icon :name="pushSubscribed ? 'bell' : 'bellOff'" :size="18" />
+      </button>
     </div>
 
     <div ref="listEl" class="chat-list" @scroll.passive>
@@ -388,6 +425,9 @@ function playVoice(m: ChatMessage) {
 }
 .hint {
   margin-left: auto;
+}
+.push-toggle {
+  flex: none;
 }
 .chat-list {
   flex: 1;

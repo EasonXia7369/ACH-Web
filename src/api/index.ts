@@ -17,7 +17,7 @@ export async function upload<T = any>(
   path: string,
   body: ArrayBuffer | Uint8Array | Blob,
 ): Promise<T> {
-  const headers: Record<string, string> = {}
+  const headers: Record<string, string> = { ...pushDeviceHeader() }
   const token = getToken()
   if (token) headers.Authorization = `Bearer ${token}`
   headers['Content-Type'] = 'application/octet-stream'
@@ -34,6 +34,15 @@ export function mediaUrl(classId: number, msgId: number): string {
 
 export function getToken(): string {
   return localStorage.getItem(TOKEN_KEY) ?? ''
+}
+
+/**
+ * 本设备推送标识（usePush 生成）：随请求上报，
+ * 服务端推送时排除发起操作的设备自身（自己操作不提醒自己）。
+ */
+function pushDeviceHeader(): Record<string, string> {
+  const id = localStorage.getItem('ark-push-device')
+  return id ? { 'X-Push-Device': id } : {}
 }
 
 export function setToken(token: string): void {
@@ -55,7 +64,7 @@ export async function api<T = any>(
   path: string,
   body?: unknown,
 ): Promise<T> {
-  const headers: Record<string, string> = {}
+  const headers: Record<string, string> = { ...pushDeviceHeader() }
   const token = getToken()
   const hadToken = !!token
   if (token) headers.Authorization = `Bearer ${token}`

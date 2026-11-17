@@ -72,13 +72,12 @@ const builtinQuote = computed(
   () => QUOTES[Math.floor((now.value.valueOf() / 86400000) * 2654435761) % QUOTES.length],
 )
 
-/* 一言接口：班级配置了 hitokoto 来源时，按分类拉取，每天一条（本机缓存） */
+/* 一言接口：班级配置了 hitokoto 来源时，按分类拉取，按配置的切换周期轮换（本机缓存） */
 const HITOKOTO_URL = 'https://v1.hitokoto.cn/'
 const hitokoto = ref<{ text: string; author: string } | null>(null)
 const quote = computed(() => hitokoto.value ?? builtinQuote.value)
 
-async function loadQuote() {
-  hitokoto.value = null
+const quoteCfg = computed(() => {
   let cfg: any = store.current?.quote_config
   if (typeof cfg === 'string') {
     try {
@@ -87,10 +86,34 @@ async function loadQuote() {
       cfg = null
     }
   }
+  return cfg
+})
+
+/** 切换周期（分钟）：0 = 每天一条；下限 5，与服务端校验一致 */
+const quoteRefreshMinutes = computed(() => {
+  const cfg = quoteCfg.value
+  const m = Number(cfg?.refresh_minutes) || 0
+  return cfg?.source === 'hitokoto' && m >= 5 ? Math.min(1440, m) : 0
+})
+
+/** 当前轮换桶：按天用日期串；按分钟用时间窗口序号（随大板时钟到点自动换句） */
+const quoteBucket = computed(() => {
+  const m = quoteRefreshMinutes.value
+  if (!m) return today
+  return Math.floor(now.value.valueOf() / (m * 60000))
+})
+
+const quoteFingerprint = computed(() => {
+  const cfg = quoteCfg.value
+  return (cfg?.cats ?? []).slice().sort().join('') + '-' + (cfg?.max_length ?? 30) + '-' + quoteRefreshMinutes.value
+})
+
+async function loadQuote() {
+  hitokoto.value = null
+  const cfg = quoteCfg.value
   if (!cfg || cfg.source !== 'hitokoto' || !store.current) return
-  const fingerprint = (cfg.cats ?? []).slice().sort().join('') + '-' + (cfg.max_length ?? 30)
-  const cacheKey = `ark-hitokoto-${store.current.id}-${today}-${fingerprint}`
-  // 清掉旧日期/旧配置的缓存
+  const cacheKey = `ark-hitokoto-${store.current.id}-${quoteBucket.value}-${quoteFingerprint.value}`
+  // 清掉旧周期/旧配置的缓存
   for (let i = localStorage.length - 1; i >= 0; i--) {
     const k = localStorage.key(i)
     if (k?.startsWith('ark-hitokoto-') && k !== cacheKey) localStorage.removeItem(k)
@@ -141,23 +164,13 @@ const slotLabel = computed(() => ({ morning: '早', noon: '中', evening: '晚' 
 
 const activeStudents = computed(() => store.students.filter((s) => s.active))
 
-/** 已经过去的时段（与登记口径一致：8 点算早、12 点算中、17 点算晚） */
-const elapsedSlots = computed<string[]>(() => {
-  const h = now.value.hour()
-  const out: string[] = []
-  if (h >= 8) out.push('morning')
-  if (h >= 12) out.push('noon')
-  if (h >= 17) out.push('evening')
-  return out.length ? out : ['morning']
-})
-
-/** 全天概况：跨已过时段聚合，人名去重；请假/旷课不计实到，迟到算到勤 */
+/** 当前时段概况：只统计当前时段的考勤，人名去重；请假/旷课不计实到，迟到算到勤 */
 const todaySummary = computed(() => {
   const lists = { leave: [] as string[], absent: [] as string[], late: [] as string[], violate: [] as string[] }
   const ids = new Set<string>()
   const nameOf = (sid: number) => activeStudents.value.find((s) => s.id === sid)?.name ?? `#${sid}`
   for (const a of attendance.value) {
-    if (!elapsedSlots.value.includes(a.slot)) continue
+    if (a.slot !== slot.value) continue
     if (a.status in lists && !ids.has(`${a.status}|${a.student_id}`)) {
       ids.add(`${a.status}|${a.student_id}`)
       lists[a.status as keyof typeof lists].push(nameOf(a.student_id))
@@ -171,7 +184,7 @@ const todaySummary = computed(() => {
     absent: lists.absent,
     late: lists.late,
     violate: lists.violate,
-    slots: elapsedSlots.value,
+    slots: [slot.value],
   }
 })
 const shouldCome = computed(() => todaySummary.value.total)
@@ -204,8 +217,8 @@ async function load() {
 }
 
 watch(() => store.current?.id, load, { immediate: true })
-// 班级或寄语配置变化 → 重取一言（内置来源会被置空回退）
-watch(() => [store.current?.id, store.current?.quote_config], loadQuote, { immediate: true })
+// 班级或寄语配置变化 / 轮换桶推进（切换周期到点）→ 重取一言（内置来源会被置空回退）
+watch(() => [store.current?.id, store.current?.quote_config, quoteBucket.value], loadQuote, { immediate: true })
 // 其他设备变更了作业/考勤/值日 → 自动重拉
 watch(() => chat.refreshTick, () => load())
 
