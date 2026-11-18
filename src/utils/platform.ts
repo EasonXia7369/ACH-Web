@@ -26,6 +26,8 @@ interface ArkDesktopBridge {
   setAutostart(on: boolean): Promise<boolean>
   webSyncState?(): Promise<ArkWebSyncState>
   checkWebSync?(): Promise<{ updated: boolean; hash?: string; error?: string; skipped?: boolean; reason?: string }>
+  /** 桌面壳版本号（1.0.3+ 壳提供） */
+  version?(): Promise<string>
 }
 
 export const desktopBridge: ArkDesktopBridge | null =

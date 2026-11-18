@@ -33,6 +33,7 @@ const PATHS: Record<string, string> = {
   x: 'M6 6l12 12 M18 6L6 18',
   bell: 'M6 10a6 6 0 0 1 12 0c0 5 1.8 6.5 2.2 7H3.8C4.2 16.5 6 15 6 10z M10.3 20a2 2 0 0 0 3.4 0',
   bellOff: 'M6 10a6 6 0 0 1 12 0c0 5 1.8 6.5 2.2 7H3.8C4.2 16.5 6 15 6 10z M10.3 20a2 2 0 0 0 3.4 0 M4 4l16 16',
+  info: 'M12 3a9 9 0 1 0 9 9 9 9 0 0 0-9-9z M12 8h.01 M12 11.5v5.5',
 }
 
 const svgPath = PATHS[props.name] ?? PATHS.check

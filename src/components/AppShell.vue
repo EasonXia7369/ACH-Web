@@ -201,6 +201,10 @@ onBeforeUnmount(() => chat.reset())
           <Icon name="manage" :size="20" />
           <span>桌面</span>
         </button>
+        <button class="rail-item" title="关于" @click="router.push('/about')">
+          <Icon name="info" :size="20" />
+          <span>关于</span>
+        </button>
         <button class="rail-item" :title="isDark ? '切换浅色' : '切换深色'" @click="toggleDark()">
           <Icon :name="isDark ? 'sun' : 'moon'" :size="20" />
           <span>{{ isDark ? '浅色' : '深色' }}</span>
@@ -296,6 +300,9 @@ onBeforeUnmount(() => chat.reset())
             </span>
             <button class="gbtn gmini" :disabled="syncBusy" @click="checkWebSync">检查更新</button>
           </div>
+          <button class="gbtn" style="width: 100%; margin-top: 6px" @click="deskPop = false; router.push('/about')">
+            关于方舟班级中心
+          </button>
         </div>
       </div>
     </Teleport>

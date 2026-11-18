@@ -4,6 +4,10 @@ import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  // 构建时间戳：关于页展示「构建于」（每次构建刷新）
+  define: {
+    __BUILD_AT__: JSON.stringify(new Date().toISOString()),
+  },
   plugins: [
     vue(),
     VitePWA({
