@@ -5,6 +5,18 @@
  *   （壳工程 preload 经 contextBridge 暴露 window.ark，见 ArkClassHub Windows/preload.js）
  * 桌面分支全部运行时探测，浏览器构建不会执行桌面路径。
  */
+
+/** 前端热同步状态（1.0.2+ 壳提供，旧壳/浏览器端为 undefined） */
+export interface ArkWebSyncState {
+  source: 'live' | 'bundled'
+  hash: string | null
+  lastCheck: string | null
+  lastSwap: string | null
+  lastError: string | null
+  disabled: boolean
+  checking: boolean
+}
+
 interface ArkDesktopBridge {
   desktop: true
   saveFile(filename: string, data: Uint8Array): Promise<string | null>
@@ -12,6 +24,8 @@ interface ArkDesktopBridge {
   setFullscreen(on: boolean): Promise<void>
   setAlwaysOnTop(on: boolean): Promise<void>
   setAutostart(on: boolean): Promise<boolean>
+  webSyncState?(): Promise<ArkWebSyncState>
+  checkWebSync?(): Promise<{ updated: boolean; hash?: string; error?: string; skipped?: boolean; reason?: string }>
 }
 
 export const desktopBridge: ArkDesktopBridge | null =

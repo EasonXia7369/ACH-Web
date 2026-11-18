@@ -6,7 +6,7 @@ import { useAuthStore } from '@/stores/auth'
 import { useClassStore } from '@/stores/class'
 import { useChatStore } from '@/stores/chat'
 import { useNotify } from '@/composables/useNotify'
-import { isDesktop, desktopBridge } from '@/utils/platform'
+import { isDesktop, desktopBridge, type ArkWebSyncState } from '@/utils/platform'
 import Icon from '@/components/Icon.vue'
 import BrandLogo from '@/components/BrandLogo.vue'
 
@@ -20,11 +20,13 @@ const notify = useNotify()
 const isDark = useDark({ storageKey: 'ark-theme' })
 const toggleDark = useToggle(isDark)
 
-/* 桌面端设置（仅桌面壳显示）：全屏（大板/一体机用）/ 窗口置顶 / 开机自启 */
+/* 桌面端设置（仅桌面壳显示）：全屏（大板/一体机用）/ 窗口置顶 / 开机自启 / 前端热同步 */
 const deskPop = ref(false)
 const deskFullscreen = ref(false)
 const deskOnTop = ref(false)
 const deskAutostart = ref(false)
+const webSync = ref<ArkWebSyncState | null>(null)
+const syncBusy = ref(false)
 
 async function initDesktopState() {
   try {
@@ -35,6 +37,36 @@ async function initDesktopState() {
   } catch {
     /* 状态读取失败不阻塞面板 */
   }
+}
+
+async function loadWebSync() {
+  try {
+    webSync.value = (await desktopBridge?.webSyncState?.()) ?? null
+  } catch {
+    webSync.value = null
+  }
+}
+
+async function checkWebSync() {
+  if (!desktopBridge?.checkWebSync || syncBusy.value) return
+  syncBusy.value = true
+  try {
+    const r = await desktopBridge.checkWebSync()
+    if (r.updated) toast('前端已更新到最新，正在刷新页面')
+    else if (r.error) toast('检查更新失败：' + r.error)
+    else if (r.skipped) toast(webSync.value?.disabled ? '热同步已被禁用（存在 web-sync-off）' : '无需更新')
+    else toast('已是最新版本')
+  } catch (e: any) {
+    toast('检查更新失败：' + (e.message ?? '未知错误'))
+  } finally {
+    syncBusy.value = false
+  }
+  setTimeout(loadWebSync, 1000)
+}
+
+/** 前端版本指纹缩写：index-CALAtp8x.js → CALAtp8x */
+function shortHash(hash: string | null) {
+  return hash ? hash.replace(/^index-/, '').replace(/\.js$/, '') : '—'
 }
 async function setFullscreen(on: boolean) {
   await desktopBridge!.setFullscreen(on)
@@ -54,7 +86,10 @@ function onDeskKeydown(e: KeyboardEvent) {
   }
 }
 watch(deskPop, (open) => {
-  if (open) initDesktopState()
+  if (open) {
+    initDesktopState()
+    loadWebSync()
+  }
 })
 onMounted(() => {
   if (isDesktop) window.addEventListener('keydown', onDeskKeydown)
@@ -97,6 +132,13 @@ function logout() {
   chat.reset()
   store.reset()
   router.replace('/login')
+}
+
+/* ---------- toast ---------- */
+const toastMsg = ref('')
+function toast(msg: string) {
+  toastMsg.value = msg
+  setTimeout(() => (toastMsg.value = ''), 2600)
 }
 
 // 班级就绪后建立消息实时连接；切换班级时重连
@@ -244,6 +286,16 @@ onBeforeUnmount(() => chat.reset())
               {{ deskAutostart ? '已开启' : '已关闭' }}
             </button>
           </div>
+          <div v-if="webSync" class="desk-row">
+            <span>
+              前端版本
+              <small>
+                {{ webSync.source === 'live' ? '已同步线上最新' : '内置版本' }} · {{ shortHash(webSync.hash) }}
+                <template v-if="webSync.lastError"> · 上次失败</template>
+              </small>
+            </span>
+            <button class="gbtn gmini" :disabled="syncBusy" @click="checkWebSync">检查更新</button>
+          </div>
         </div>
       </div>
     </Teleport>
@@ -300,6 +352,8 @@ onBeforeUnmount(() => chat.reset())
         </div>
       </div>
     </Teleport>
+
+    <div v-if="toastMsg" class="gtoast">{{ toastMsg }}</div>
   </div>
 </template>
 
