@@ -59,6 +59,30 @@ async function removeTeacher(t: { id: number; name: string }) {
   }
 }
 
+/** 管理员：直接新建教师账号并加入本班（无需先走邀请码流程） */
+const newTeacherName = ref('')
+const newTeacherPass = ref('')
+async function createAndAddTeacher() {
+  const name = newTeacherName.value.trim()
+  if (!name || !store.current) return
+  try {
+    const res = await post<{ user: { id: number; name: string } }>('/api/admin/users', {
+      name,
+      password: newTeacherPass.value,
+    })
+    await post(`/api/classes/${store.current.id}/teachers`, { user_id: res.user.id })
+    toastMsg.value = `教师「${res.user.name}」已创建并加入本班`
+    setTimeout(() => (toastMsg.value = ''), 2600)
+    newTeacherName.value = ''
+    newTeacherPass.value = ''
+    await refreshAvailableTeachers()
+    await store.switchTo(store.current.id)
+  } catch (e: any) {
+    toastMsg.value = e.message
+    setTimeout(() => (toastMsg.value = ''), 2600)
+  }
+}
+
 type Tab = 'students' | 'timetable' | 'duty' | 'settings' | 'audit' | 'accounts' | 'invites' | 'import'
 const tabs = computed<Array<{ key: Tab; label: string; icon: string }>>(() => {
   const base: Array<{ key: Tab; label: string; icon: string }> = [
@@ -537,11 +561,23 @@ onMounted(() => {
       </div>
       <div class="row" style="margin-top: 10px">
         <select v-model.number="addTeacherId" class="gselect" style="flex: 1">
-          <option :value="null" disabled>选择要添加的教师</option>
+          <option :value="null" disabled>{{ availableTeachers.length ? '选择要添加的教师' : '暂无可添加的教师账号' }}</option>
           <option v-for="t in availableTeachers" :key="t.id" :value="t.id">{{ t.name }}</option>
         </select>
         <button class="gbtn" :disabled="!addTeacherId" @click="addTeacher">添加</button>
       </div>
+      <p v-if="!availableTeachers.length" class="foot-note" style="margin: 6px 0 0">
+        {{ isAdmin ? '没有已存在但未加入本班的教师账号，可在下方直接新建（自动加入本班）。' : '没有可添加的教师账号：请让管理员创建教师账号（管理 → 邀请码 生成邀请码，教师自行激活），激活后即可在此添加。' }}
+      </p>
+      <template v-if="isAdmin">
+        <div class="row" style="margin-top: 8px; align-items: center">
+          <input v-model="newTeacherName" class="ginput" placeholder="新教师姓名" maxlength="20" style="flex: 1" />
+          <input v-model="newTeacherPass" class="ginput" placeholder="初始密码" maxlength="30" style="width: 110px" />
+          <button class="gbtn" :disabled="!newTeacherName.trim() || newTeacherPass.length < 4" @click="createAndAddTeacher">
+            新建并加入本班
+          </button>
+        </div>
+      </template>
 
       <h3 class="sec-title" style="margin-top: 20px">每日寄语来源</h3>
       <p class="foot-note" style="margin: 0 0 8px">大板寄语卡的句子来源。内置为精选古诗词（按日期轮换）；一言接口来自 hitokoto.cn，切换周期可调。</p>

@@ -177,9 +177,9 @@ onBeforeUnmount(() => chat.reset())
   <div class="shell">
     <!-- 桌面侧栏 -->
     <aside class="rail glass">
-      <div class="rail-logo" title="班级中心">
+      <button class="rail-logo" title="关于方舟班级中心" @click="router.push('/about')">
         <BrandLogo :size="26" />
-      </div>
+      </button>
       <div class="rail-brand">方舟班级中心</div>
       <nav class="rail-nav">
         <RouterLink
@@ -232,6 +232,9 @@ onBeforeUnmount(() => chat.reset())
         </div>
         <div class="top-right">
           <span class="whoami"><span class="whoami-name">{{ auth.user?.name }}</span><i v-if="auth.user?.role === 'admin'">管理员</i><i v-else-if="auth.user?.role === 'student'">值日生</i></span>
+          <button class="gbtn icon topbtn" title="关于" @click="router.push('/about')">
+            <Icon name="info" :size="17" />
+          </button>
           <button class="gbtn icon topbtn" :title="isDark ? '切换浅色' : '切换深色'" @click="toggleDark()">
             <Icon :name="isDark ? 'sun' : 'moon'" :size="17" />
           </button>
@@ -490,11 +493,15 @@ onBeforeUnmount(() => chat.reset())
   height: 44px;
   margin: 0 auto 6px;
   border-radius: 14px;
+  border: none;
   background: linear-gradient(135deg, #4f6ef7, #2f49b2);
   color: #fff;
   display: grid;
   place-items: center;
   flex: none;
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
 }
 .rail-nav {
   display: flex;

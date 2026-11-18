@@ -19,11 +19,10 @@ export const router = createRouter({
       meta: { public: true },
     },
     {
-      // 关于页：公开（品牌/版本/热同步状态/后端健康/开源许可，无敏感数据）
+      // 关于页：登录后在壳内展示（品牌/版本/热同步状态/后端健康/开源许可，无敏感数据）
       path: '/about',
       name: 'about',
       component: () => import('@/views/AboutView.vue'),
-      meta: { public: true },
     },
     {
       // 家长只读视图（脱敏）

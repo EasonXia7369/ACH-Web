@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { API_BASE, getToken } from '@/api'
+import { API_BASE } from '@/api'
 import { desktopBridge, type ArkWebSyncState } from '@/utils/platform'
 import BrandLogo from '@/components/BrandLogo.vue'
 
@@ -24,8 +24,6 @@ const shellVersion = ref<string | null>(null)
 const sync = ref<ArkWebSyncState | null>(null)
 /** 后端健康状态 */
 const api = ref<{ ok: boolean; latency: number } | null>(null)
-
-const logged = !!getToken()
 
 onMounted(async () => {
   try {
@@ -102,22 +100,15 @@ onMounted(async () => {
           <a href="https://github.com/EasonXia7369/ArkClassHub-Desktop" target="_blank" rel="noopener">ArkClassHub-Desktop</a>
         </div>
       </div>
-
-      <div class="back">
-        <a v-if="logged" class="gbtn primary" href="/board">回到班级中心</a>
-        <a v-else class="gbtn primary" href="/login">去登录</a>
-      </div>
     </div>
   </div>
 </template>
 
 <style scoped>
 .about {
-  min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 24px 16px;
-  background: var(--bg);
+  padding: 12px 0 4px;
 }
 .card {
   width: min(560px, 94vw);
@@ -198,10 +189,5 @@ onMounted(async () => {
 }
 .links a:hover {
   text-decoration: underline;
-}
-.back {
-  margin-top: 22px;
-  display: flex;
-  justify-content: center;
 }
 </style>
