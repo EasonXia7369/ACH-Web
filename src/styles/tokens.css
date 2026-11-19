@@ -46,9 +46,28 @@
   --violate: #bf5af2;
   --violate-bg: rgba(191, 90, 242, 0.15);
 
+  /* 板块主题色（导航/区块图标 tile，图标级点缀；暗色变体） */
+  --tile-board: #0a84ff;
+  --tile-board-bg: rgba(10, 132, 255, 0.18);
+  --tile-attend: #30d158;
+  --tile-attend-bg: rgba(48, 209, 88, 0.16);
+  --tile-hw: #ff9f0a;
+  --tile-hw-bg: rgba(255, 159, 10, 0.16);
+  --tile-msg: #ff375f;
+  --tile-msg-bg: rgba(255, 55, 95, 0.16);
+  --tile-manage: #bf5af2;
+  --tile-manage-bg: rgba(191, 90, 242, 0.16);
+
+  /* 首页 hero 卡（时钟）：全页唯一渐变面 */
+  --hero-grad: linear-gradient(135deg, #0a5cff 0%, #3a5be0 55%, #5e5ce6 100%);
+  --hero-glow: radial-gradient(120% 90% at 90% -10%, rgba(255, 255, 255, 0.18), transparent 55%);
+  --on-hero: #ffffff;
+  --on-hero-soft: rgba(255, 255, 255, 0.72);
+
   --shadow: 0 12px 40px rgba(0, 0, 0, 0.45), 0 2px 10px rgba(0, 0, 0, 0.3);
   --radius: 16px;
   --radius-sm: 10px;
+  --radius-lg: 24px;
 
   color-scheme: dark;
 }
@@ -90,9 +109,28 @@
   --violate: #af52de;
   --violate-bg: rgba(175, 82, 222, 0.1);
 
+  /* 板块主题色（导航/区块图标 tile，图标级点缀；浅色变体） */
+  --tile-board: #007aff;
+  --tile-board-bg: rgba(0, 122, 255, 0.11);
+  --tile-attend: #34c759;
+  --tile-attend-bg: rgba(52, 199, 89, 0.12);
+  --tile-hw: #ff9500;
+  --tile-hw-bg: rgba(255, 149, 0, 0.12);
+  --tile-msg: #ff2d55;
+  --tile-msg-bg: rgba(255, 45, 85, 0.1);
+  --tile-manage: #af52de;
+  --tile-manage-bg: rgba(175, 82, 222, 0.11);
+
+  /* 首页 hero 卡（时钟）：全页唯一渐变面 */
+  --hero-grad: linear-gradient(135deg, #007aff 0%, #2f6bff 55%, #5856d6 100%);
+  --hero-glow: radial-gradient(120% 90% at 90% -10%, rgba(255, 255, 255, 0.22), transparent 55%);
+  --on-hero: #ffffff;
+  --on-hero-soft: rgba(255, 255, 255, 0.75);
+
   --shadow: 0 10px 32px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.06);
   --radius: 16px;
   --radius-sm: 10px;
+  --radius-lg: 24px;
 
   color-scheme: light;
 }

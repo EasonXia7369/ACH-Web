@@ -99,11 +99,11 @@ onBeforeUnmount(() => {
 })
 
 const NAV = [
-  { to: '/board', name: '大板', icon: 'board' },
-  { to: '/attendance', name: '出勤', icon: 'attendance' },
-  { to: '/homework', name: '作业', icon: 'homework' },
-  { to: '/messages', name: '消息', icon: 'chat', badge: true },
-  { to: '/manage', name: '管理', icon: 'manage' },
+  { to: '/board', name: '大板', icon: 'board', key: 'board' },
+  { to: '/attendance', name: '出勤', icon: 'attendance', key: 'attend' },
+  { to: '/homework', name: '作业', icon: 'homework', key: 'hw' },
+  { to: '/messages', name: '消息', icon: 'chat', key: 'msg', badge: true },
+  { to: '/manage', name: '管理', icon: 'manage', key: 'manage' },
 ]
 
 const switching = ref(false)
@@ -189,8 +189,11 @@ onBeforeUnmount(() => chat.reset())
           class="rail-item"
           :class="{ on: route.path.startsWith(item.to) }"
         >
-          <span class="nav-icon-wrap">
-            <Icon :name="item.icon" :size="20" />
+          <span
+            class="nav-icon-wrap ico-tile"
+            :style="{ '--tile-color': `var(--tile-${item.key})`, '--tile-bg': `var(--tile-${item.key}-bg)` }"
+          >
+            <Icon :name="item.icon" :size="19" />
             <b v-if="item.badge && chat.unread" class="badge">{{ chat.unread > 99 ? '99+' : chat.unread }}</b>
           </span>
           <span>{{ item.name }}</span>
@@ -258,8 +261,11 @@ onBeforeUnmount(() => chat.reset())
         class="mobile-item"
         :class="{ on: route.path.startsWith(item.to) }"
       >
-        <span class="nav-icon-wrap">
-          <Icon :name="item.icon" :size="21" />
+        <span
+          class="nav-icon-wrap ico-tile"
+          :style="{ '--tile-color': `var(--tile-${item.key})`, '--tile-bg': `var(--tile-${item.key}-bg)` }"
+        >
+          <Icon :name="item.icon" :size="19" />
           <b v-if="item.badge && chat.unread" class="badge mobile">{{ chat.unread > 99 ? '99+' : chat.unread }}</b>
         </span>
         <span>{{ item.name }}</span>
@@ -375,6 +381,15 @@ onBeforeUnmount(() => chat.reset())
 .nav-icon-wrap {
   position: relative;
   display: inline-flex;
+}
+/* 选中行：tile 已带板块色，行高亮改为中性玻璃提亮，避免「全蓝」单一印象 */
+.rail-item.on {
+  background: var(--field);
+  color: var(--text);
+}
+.mobile-item.on {
+  background: var(--field);
+  color: var(--text);
 }
 .badge {
   position: absolute;

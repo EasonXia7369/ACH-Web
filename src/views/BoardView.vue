@@ -393,9 +393,9 @@ onMounted(() => {
 <template>
   <div class="board">
     <div class="board-main">
-      <!-- 第一行：时钟 + 寄语 -->
+      <!-- 第一行：时钟（hero 渐变锚点）+ 寄语 -->
       <div class="row1">
-        <div class="glass clock-card">
+        <div class="hero-card clock-card">
           <div class="clock num">
             {{ clockHM }}<span class="sec">:{{ clockSS }}</span>
           </div>
@@ -412,9 +412,9 @@ onMounted(() => {
       </div>
 
       <!-- 作业科目卡片墙 -->
-      <div class="glass wall-card">
-        <div class="sec-head">
-          <h2><Icon name="homework" :size="17" /> 今日作业</h2>
+        <div class="glass wall-card">
+          <div class="sec-head">
+            <h2><span class="ico-tile" style="--tile-color: var(--tile-hw); --tile-bg: var(--tile-hw-bg)"><Icon name="homework" :size="15" /></span> 今日作业</h2>
           <div class="sec-head-r" style="display: flex; align-items: center; gap: 8px">
             <span class="hint">{{ isStudent ? '作业实时展示，点卡片上的按钮登记未交或修改' : '布置后自动放大展示；点卡片按钮登记未交或修改' }}</span>
             <span class="font-adjust">
@@ -459,11 +459,11 @@ onMounted(() => {
 
     <!-- 右列：出勤概况 + 值日生 -->
     <div class="board-side">
-      <div class="glass att-card">
-        <div class="sec-head">
-          <h2><Icon name="attendance" :size="17" /> 今日出勤概况</h2>
-          <span class="hint">{{ summarySlotsLabel }}</span>
-        </div>
+        <div class="glass att-card">
+          <div class="sec-head">
+            <h2><span class="ico-tile" style="--tile-color: var(--tile-attend); --tile-bg: var(--tile-attend-bg)"><Icon name="attendance" :size="15" /></span> 今日出勤概况</h2>
+            <span class="hint">{{ summarySlotsLabel }}</span>
+          </div>
         <div class="att-grid">
           <div class="att-item">
             <span class="att-num num">{{ shouldCome }}</span>
@@ -514,7 +514,7 @@ onMounted(() => {
 
       <div class="glass tt-card">
         <div class="sec-head">
-          <h2><Icon name="calendar" :size="17" /> 今日课程</h2>
+          <h2><span class="ico-tile" style="--tile-color: var(--tile-board); --tile-bg: var(--tile-board-bg)"><Icon name="calendar" :size="15" /></span> 今日课程</h2>
         </div>
         <div v-if="periods.length" class="tt-list">
           <div v-for="p in periods" :key="p.period" class="tt-row">
@@ -528,7 +528,7 @@ onMounted(() => {
 
       <div class="glass parent-card">
         <div class="sec-head">
-          <h2><Icon name="users" :size="17" /> 家长视图</h2>
+          <h2><span class="ico-tile" style="--tile-color: var(--tile-msg); --tile-bg: var(--tile-msg-bg)"><Icon name="users" :size="15" /></span> 家长视图</h2>
         </div>
         <p class="foot-note" style="margin: 0 0 10px">脱敏后的作业/出勤只读页，链接发家长群即可。</p>
         <button class="gbtn primary" style="width: 100%" @click="openParent">查看二维码与链接</button>
@@ -536,7 +536,7 @@ onMounted(() => {
 
       <div class="glass duty-card">
         <div class="sec-head">
-          <h2><Icon name="users" :size="17" /> 今日值日生</h2>
+          <h2><span class="ico-tile" style="--tile-color: var(--tile-attend); --tile-bg: var(--tile-attend-bg)"><Icon name="users" :size="15" /></span> 今日值日生</h2>
         </div>
         <div v-if="duty.length" class="duty-list">
           <span v-for="m in duty" :key="m.student_id" class="duty-tag">
@@ -654,17 +654,18 @@ onMounted(() => {
 }
 .clock-card {
   padding: 26px 28px 22px;
+  color: var(--on-hero);
 }
 .clock {
   font-size: clamp(56px, 7vw, 84px);
   font-weight: 600;
   line-height: 1;
   letter-spacing: -0.02em;
-  color: var(--text);
+  color: var(--on-hero);
 }
 .clock .sec {
   font-size: 0.34em;
-  color: var(--faint);
+  color: var(--on-hero-soft);
   font-weight: 500;
 }
 .clock-meta {
@@ -674,11 +675,11 @@ onMounted(() => {
   gap: 8px;
   margin-top: 14px;
   font-size: 13.5px;
-  color: var(--muted);
+  color: var(--on-hero-soft);
   flex-wrap: wrap;
 }
 .clock-meta .part {
-  color: var(--primary);
+  color: var(--on-hero);
   font-weight: 600;
   font-size: 13px;
 }

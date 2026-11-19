@@ -1,7 +1,21 @@
 /*
- * 共享组件样式 v2 —— Apple 材质 + shadcn 骨架
+ * 共享组件样式 v3 —— Apple 材质 + shadcn 骨架 + 板块主题色
  * 组件内部只写布局，表面一律引用这里的类与令牌。
+ * v3：连续曲率圆角（squircle，渐进增强）、板块图标 tile、hero 卡、错落入场动效
  */
+
+/* ---------- 连续曲率圆角（squircle，渐进增强） ----------
+ * corner-shape 是 border-radius 的原生扩展（Chrome/Edge 139+）：
+ * 阴影/边框/裁剪自动跟随，不支持的浏览器安全降级为普通圆角。
+ * 只对较大圆角（≥16px）启用——小圆角下连续曲率感知不明显，省解析。
+ */
+.glass,
+.glass-strong,
+.gpop,
+.hero-card,
+.ico-tile {
+  corner-shape: superellipse(2.8);
+}
 
 /* ---------- 玻璃卡片 ---------- */
 .glass {
@@ -21,6 +35,55 @@
   border-radius: var(--radius);
   box-shadow: var(--shadow), var(--glass-inset);
 }
+
+/* ---------- 板块图标 tile（iOS 设置页风：彩色 squircle 小方块承载图标） ---------- */
+.ico-tile {
+  width: 30px;
+  height: 30px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  background: var(--tile-bg, var(--primary-soft));
+  color: var(--tile-color, var(--primary));
+}
+
+/* ---------- hero 卡（首页时钟）：全页唯一渐变面，视觉锚点 ---------- */
+.hero-card {
+  position: relative;
+  background: var(--hero-grad);
+  border: none;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 14px 36px rgba(37, 91, 224, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  overflow: hidden;
+}
+.hero-card::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--hero-glow);
+  pointer-events: none;
+}
+
+/* ---------- 错落入场（主内容直接子卡依次浮入） ---------- */
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.content > * {
+  animation: rise-in var(--dur-med) var(--ease-spring) backwards;
+}
+.content > *:nth-child(2) { animation-delay: 0.04s; }
+.content > *:nth-child(3) { animation-delay: 0.08s; }
+.content > *:nth-child(4) { animation-delay: 0.12s; }
+.content > *:nth-child(5) { animation-delay: 0.16s; }
 
 /* ---------- 按钮 ---------- */
 .gbtn {
