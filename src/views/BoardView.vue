@@ -21,21 +21,39 @@ const store = useClassStore()
 const isStudent = computed(() => auth.user?.role === 'student')
 const isAdmin = computed(() => auth.user?.role === 'admin')
 
-/* ---------- 大板自适应缩放：跟随窗口宽度整体缩放（基准 1280 设计宽度） ---------- */
+/* ---------- 大板自适应缩放：跟随窗口宽度整体缩放（基准 1280 设计宽度） ----------
+ * 桌面端：只通知壳主进程 on/off，缩放由主进程挂在窗口 resize 事件上驱动——
+ * webFrame 缩放不会触发窗口 resize，天然避开「缩放→innerWidth 变化→重算→再缩放」的震荡。
+ * 网页端：CSS zoom（浏览器对 zoom 的 innerWidth 处理稳定，实测无震荡）。
+ */
 const BOARD_BASE = 1280
 const boardScaleOn = ref(localStorage.getItem('ark-board-scale') !== '0')
+let scaleTimer: ReturnType<typeof setTimeout> | null = null
 
 function applyBoardScale() {
+  if (desktopBridge) {
+    desktopBridge.setBoardScale?.(boardScaleOn.value)
+    return
+  }
   if (!boardScaleOn.value) return
-  const scale = Math.min(3, Math.max(0.55, window.innerWidth / BOARD_BASE))
-  // 桌面端走 Electron 渲染层缩放（文字清晰、媒体查询响应）；网页端用标准 CSS zoom
-  if (desktopBridge) desktopBridge.setZoom?.(scale)
-  else document.documentElement.style.zoom = String(scale)
+  const target = Math.min(3, Math.max(0.55, window.innerWidth / BOARD_BASE))
+  const cur = parseFloat(document.documentElement.style.zoom) || 1
+  if (Math.abs(target - cur) < 0.02) return
+  document.documentElement.style.zoom = String(target)
+}
+
+function scheduleBoardScale() {
+  if (scaleTimer) clearTimeout(scaleTimer)
+  scaleTimer = setTimeout(applyBoardScale, 100)
 }
 
 function resetBoardScale() {
-  if (desktopBridge) desktopBridge.setZoom?.(1)
-  else document.documentElement.style.zoom = ''
+  if (scaleTimer) clearTimeout(scaleTimer)
+  if (desktopBridge) {
+    desktopBridge.setBoardScale?.(false)
+    return
+  }
+  if (document.documentElement.style.zoom) document.documentElement.style.zoom = ''
 }
 
 watch(boardScaleOn, (on) => {
@@ -45,12 +63,12 @@ watch(boardScaleOn, (on) => {
 })
 
 onMounted(() => {
-  window.addEventListener('resize', applyBoardScale)
+  window.addEventListener('resize', scheduleBoardScale)
   applyBoardScale()
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('resize', applyBoardScale)
+  window.removeEventListener('resize', scheduleBoardScale)
   resetBoardScale()
 })
 
