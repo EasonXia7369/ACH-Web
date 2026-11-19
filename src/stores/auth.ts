@@ -7,6 +7,8 @@ export interface AuthUser {
   name: string
   /** student 会话绑定的班级 */
   classId?: number
+  /** 所属学校：admin 未挂 = 平台超管；admin 非空 = 校管理员；教师 = 所属学校 */
+  schoolId?: number | null
 }
 
 export const useAuthStore = defineStore('auth', {

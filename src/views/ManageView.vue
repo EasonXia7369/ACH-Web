@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { get, post, put, del } from '@/api'
 import { saveFile } from '@/utils/platform'
@@ -9,6 +9,8 @@ import StudentsManager from '@/components/StudentsManager.vue'
 import TimetableBoard from '@/components/TimetableBoard.vue'
 import DutyBoard from '@/components/DutyBoard.vue'
 import AuditPanel from '@/components/AuditPanel.vue'
+import SchoolAdminBoard from '@/components/SchoolAdminBoard.vue'
+import GradeSummaryBoard from '@/components/GradeSummaryBoard.vue'
 import Icon from '@/components/Icon.vue'
 import QRCode from 'qrcode'
 
@@ -18,6 +20,10 @@ const store = useClassStore()
 
 const isAdmin = computed(() => auth.user?.role === 'admin')
 const isStudent = computed(() => auth.user?.role === 'student')
+/** 平台超管：admin 且未挂学校 */
+const isPlatformAdmin = computed(() => isAdmin.value && auth.user?.schoolId == null)
+/** 校管理员：admin 且挂学校 */
+const isSchoolAdmin = computed(() => isAdmin.value && auth.user?.schoolId != null)
 
 /* 协作教师管理 */
 const addTeacherId = ref<number | null>(null)
@@ -59,17 +65,24 @@ async function removeTeacher(t: { id: number; name: string }) {
   }
 }
 
-/** 管理员：直接新建教师账号并加入本班（无需先走邀请码流程） */
+/** 管理员：直接新建教师账号并加入本班（无需先走邀请码流程）。
+ * 校管理员走 /api/school/teachers（自动挂本校）；平台超管用 /api/admin/users 并指定班级所属学校。 */
 const newTeacherName = ref('')
 const newTeacherPass = ref('')
 async function createAndAddTeacher() {
   const name = newTeacherName.value.trim()
   if (!name || !store.current) return
   try {
-    const res = await post<{ user: { id: number; name: string } }>('/api/admin/users', {
-      name,
-      password: newTeacherPass.value,
-    })
+    const res = isSchoolAdmin.value
+      ? await post<{ user: { id: number; name: string } }>('/api/school/teachers', {
+          name,
+          password: newTeacherPass.value,
+        })
+      : await post<{ user: { id: number; name: string } }>('/api/admin/users', {
+          name,
+          password: newTeacherPass.value,
+          school_id: (store.current as any).school_id,
+        })
     await post(`/api/classes/${store.current.id}/teachers`, { user_id: res.user.id })
     toastMsg.value = `教师「${res.user.name}」已创建并加入本班`
     setTimeout(() => (toastMsg.value = ''), 2600)
@@ -83,23 +96,63 @@ async function createAndAddTeacher() {
   }
 }
 
-type Tab = 'students' | 'timetable' | 'duty' | 'settings' | 'audit' | 'accounts' | 'invites' | 'import'
+type Tab =
+  | 'students'
+  | 'timetable'
+  | 'duty'
+  | 'settings'
+  | 'audit'
+  | 'accounts'
+  | 'invites'
+  | 'import'
+  | 'school'
+  | 'gradecmp'
+/* 年级汇总：当前用户可看的年级（教师为主任的年级）——tabs 依赖，须先声明 */
+const gradesMine = ref<Array<{ id: number; name: string; school_name?: string }>>([])
+async function refreshGradesMine() {
+  try {
+    gradesMine.value = (await get<{ grades: Array<{ id: number; name: string }> }>('/api/grades/mine')).grades
+  } catch {
+    gradesMine.value = []
+  }
+}
 const tabs = computed<Array<{ key: Tab; label: string; icon: string }>>(() => {
-  const base: Array<{ key: Tab; label: string; icon: string }> = [
-    { key: 'students', label: '名单', icon: 'users' },
-    { key: 'timetable', label: '课程表', icon: 'calendar' },
-    { key: 'duty', label: '值日表', icon: 'calendar' },
-    { key: 'settings', label: '班级设置', icon: 'settings' },
-    { key: 'audit', label: '修改日志', icon: 'clock' },
-  ]
-  if (isAdmin.value) {
+  const hasClass = !!store.current
+  const base: Array<{ key: Tab; label: string; icon: string }> = []
+  // 班级维度 tab：需要已选中班级
+  if (hasClass) {
+    base.push(
+      { key: 'students', label: '名单', icon: 'users' },
+      { key: 'timetable', label: '课程表', icon: 'calendar' },
+      { key: 'duty', label: '值日表', icon: 'calendar' },
+      { key: 'settings', label: '班级设置', icon: 'settings' },
+    )
+  }
+  // 日志：班主任/平台超管=本班（需班级）；校管理员=全校
+  if (hasClass || isSchoolAdmin.value) {
+    base.push({ key: 'audit', label: '修改日志', icon: 'clock' })
+  }
+  if (isSchoolAdmin.value) {
+    // 校管理员：本校管理一站式（含教师/年级/班级/邀请码）
+    base.push({ key: 'school', label: '学校管理', icon: 'users' })
+    base.push({ key: 'gradecmp', label: '年级汇总', icon: 'board' })
+  } else if (isPlatformAdmin.value) {
     base.push({ key: 'accounts', label: '账号', icon: 'users' })
     base.push({ key: 'invites', label: '邀请码', icon: 'lock' })
+    base.push({ key: 'school', label: '学校', icon: 'board' })
+    base.push({ key: 'gradecmp', label: '年级汇总', icon: 'board' })
     base.push({ key: 'import', label: '数据导入', icon: 'download' })
+  } else if (gradesMine.value.length) {
+    // 教师主任：年级汇总
+    base.push({ key: 'gradecmp', label: '年级汇总', icon: 'board' })
   }
   return base
 })
 const tab = ref<Tab>((route.query.tab as Tab) ?? 'students')
+// 可用 tab 集变化（如校管理员无班级时）→ 当前 tab 不在列则回落到第一个
+watch(tabs, (list) => {
+  if (list.length && !list.some((t) => t.key === tab.value)) tab.value = list[0].key
+}, { immediate: true })
 
 /* 班级设置 */
 const stuPass = ref('')
@@ -431,7 +484,7 @@ async function onFile(e: Event) {
   }
 }
 
-/* 创建教师账号（admin） */
+/* 创建教师账号（平台超管） */
 const newTName = ref('')
 const newTPass = ref('')
 
@@ -450,6 +503,67 @@ async function createTeacher() {
     toast(e.message)
   }
 }
+
+/* 平台超管：学校列表与创建 */
+interface SchoolRow {
+  id: number
+  name: string
+  class_count: number
+  teacher_count: number
+}
+const schools = ref<SchoolRow[]>([])
+const newSchoolName = ref('')
+const newSchoolAdminName = ref('')
+const newSchoolAdminPass = ref('')
+
+async function refreshSchools() {
+  schools.value = (await get<{ schools: SchoolRow[] }>('/api/admin/schools')).schools
+}
+
+async function createSchool() {
+  if (!newSchoolName.value.trim()) return
+  try {
+    await post('/api/admin/schools', {
+      name: newSchoolName.value.trim(),
+      admin_name: newSchoolAdminName.value.trim() || undefined,
+      admin_password: newSchoolAdminPass.value || undefined,
+    })
+    toast(
+      newSchoolAdminName.value.trim()
+        ? `学校已创建，校管理员 ${newSchoolAdminName.value.trim()} 同步建好`
+        : '学校已创建',
+    )
+    newSchoolName.value = ''
+    newSchoolAdminName.value = ''
+    newSchoolAdminPass.value = ''
+    await refreshSchools()
+  } catch (e: any) {
+    toast(e.message)
+  }
+}
+
+/* 校管理员：全校日志（audit tab 用） */
+interface SchoolAuditRow {
+  id: number
+  ts: string
+  actor: string
+  actor_name: string | null
+  class_name: string | null
+  action: string
+  detail: string
+}
+const schoolAudit = ref<SchoolAuditRow[]>([])
+async function refreshSchoolAudit() {
+  if (!isSchoolAdmin.value) return
+  try {
+    schoolAudit.value = (await get<{ logs: SchoolAuditRow[] }>('/api/school/audit')).logs
+  } catch {
+    schoolAudit.value = []
+  }
+}
+watch(tab, (t) => {
+  if (t === 'audit') refreshSchoolAudit()
+})
 
 /* 账号管理（admin）：列表 / 重置密码 / 班级转让 */
 interface AdminUser {
@@ -493,15 +607,31 @@ async function doTransfer() {
 onMounted(() => {
   initSettings()
   if (isAdmin.value) {
-    refreshInvites()
-    refreshAdminUsers()
+    if (isPlatformAdmin.value) {
+      refreshInvites()
+      refreshAdminUsers()
+      refreshSchools()
+    }
   }
+  refreshGradesMine()
   refreshParentLink()
 })
 </script>
 
 <template>
-  <!-- 无班级：先创建 -->
+  <div v-if="tabs.length" class="gseg manage-tabs">
+    <button
+      v-for="t in tabs"
+      :key="t.key"
+      :class="{ on: tab === t.key }"
+      @click="tab = t.key; initSettings()"
+    >
+      <Icon :name="t.icon" :size="14" />
+      {{ t.label }}
+    </button>
+  </div>
+
+  <!-- 无班级：班级维度内容显示创建引导；管理维度（学校/账号/年级汇总）正常可用 -->
   <div v-if="!store.current" class="glass pad empty-box">
     <template v-if="store.loaded">
       <h2>还没有班级</h2>
@@ -511,24 +641,11 @@ onMounted(() => {
     <p v-else class="empty">加载中…</p>
   </div>
 
-  <template v-else>
-    <div class="gseg manage-tabs">
-      <button
-        v-for="t in tabs"
-        :key="t.key"
-        :class="{ on: tab === t.key }"
-        @click="tab = t.key; initSettings()"
-      >
-        <Icon :name="t.icon" :size="14" />
-        {{ t.label }}
-      </button>
-    </div>
+  <StudentsManager v-else-if="tab === 'students'" />
+  <TimetableBoard v-else-if="tab === 'timetable'" :class-id="store.current.id" />
+  <DutyBoard v-else-if="tab === 'duty'" :class-id="store.current.id" />
 
-    <StudentsManager v-if="tab === 'students'" />
-    <TimetableBoard v-else-if="tab === 'timetable'" :class-id="store.current.id" />
-    <DutyBoard v-else-if="tab === 'duty'" :class-id="store.current.id" />
-
-    <div v-else-if="tab === 'settings'" class="glass pad">
+  <div v-else-if="tab === 'settings'" class="glass pad">
       <h3 class="sec-title">班级信息</h3>
       <div class="row">
         <input v-model="clsNameDraft" class="ginput" style="flex: 1" placeholder="班级名称" maxlength="20" />
@@ -652,11 +769,54 @@ onMounted(() => {
       </p>
     </div>
 
-    <div v-else-if="tab === 'audit'">
-      <AuditPanel :class-id="store.current.id" />
+    <!-- 校管理员：全校日志（不依赖班级） -->
+    <div v-if="tab === 'audit' && isSchoolAdmin" class="glass pad">
+      <h3 class="sec-title">本校修改日志</h3>
+      <div class="acct-list">
+        <div v-for="l in schoolAudit" :key="l.id" class="acct-row">
+          <span class="foot-note num">{{ l.ts.slice(0, 16).replace('T', ' ') }}</span>
+          <b>{{ l.actor_name ?? (l.actor === 'student' ? '学生' : l.actor) }}</b>
+          <span v-if="l.class_name" class="foot-note">[{{ l.class_name }}]</span>
+          <span>{{ l.action }}</span>
+          <span class="foot-note" style="margin-left: auto; text-align: right">{{ l.detail }}</span>
+        </div>
+        <p v-if="!schoolAudit.length" class="foot-note" style="margin: 0">本校还没有操作记录</p>
+      </div>
     </div>
+    <AuditPanel v-else-if="tab === 'audit' && store.current" :class-id="store.current.id" />
 
-    <template v-else-if="tab === 'accounts'">
+    <template v-if="tab === 'school'">
+      <!-- 校管理员：本校一站式；平台超管：学校列表与创建 -->
+      <SchoolAdminBoard v-if="isSchoolAdmin" />
+      <template v-else>
+        <div class="glass pad" style="margin-bottom: 14px">
+          <h3 class="sec-title">创建学校</h3>
+          <p class="foot-note" style="margin: 0 0 8px">
+            可同时创建首任校管理员；之后由校管理员自行建年级/班级/教师（见其登录后的「学校管理」）。
+          </p>
+          <div class="row" style="flex-wrap: wrap">
+            <input v-model="newSchoolName" class="ginput" placeholder="学校名称" maxlength="30" style="flex: 1; min-width: 140px" />
+            <input v-model="newSchoolAdminName" class="ginput" placeholder="校管理员姓名（可选）" maxlength="20" style="width: 170px" />
+            <input v-model="newSchoolAdminPass" class="ginput" placeholder="校管理员密码（可选）" style="width: 170px" />
+            <button class="gbtn primary" :disabled="!newSchoolName.trim()" @click="createSchool">创建</button>
+          </div>
+        </div>
+        <div class="glass pad">
+          <h3 class="sec-title">学校列表</h3>
+          <div class="acct-list">
+            <div v-for="s in schools" :key="s.id" class="acct-row">
+              <b>{{ s.name }}</b>
+              <span class="foot-note">{{ s.teacher_count }} 名教师 · {{ s.class_count }} 个班</span>
+            </div>
+            <p v-if="!schools.length" class="foot-note" style="margin: 0">还没有学校</p>
+          </div>
+        </div>
+      </template>
+    </template>
+
+    <GradeSummaryBoard v-if="tab === 'gradecmp'" />
+
+    <template v-if="tab === 'accounts'">
       <div class="glass pad">
         <h3 class="sec-title">创建教师账号（密码直接告知老师）</h3>
         <div class="acct-row" style="border: none">
@@ -704,7 +864,7 @@ onMounted(() => {
       </div>
     </template>
 
-    <template v-else-if="tab === 'invites'">
+    <template v-if="tab === 'invites'">
       <div class="glass pad">
         <h3 class="sec-title">生成邀请码（30 天有效）</h3>
         <div class="row">
@@ -736,7 +896,7 @@ onMounted(() => {
       </div>
     </template>
 
-    <template v-else-if="tab === 'import'">
+    <template v-if="tab === 'import'">
       <div class="glass pad">
         <h3 class="sec-title">导入旧系统数据</h3>
         <p class="foot-note" style="margin: 0 0 12px">
@@ -748,7 +908,6 @@ onMounted(() => {
         <p v-if="importError" class="err" style="margin: 10px 0 0">{{ importError }}</p>
       </div>
     </template>
-  </template>
 
   <!-- 创建班级弹窗 -->
   <Teleport to="body">
