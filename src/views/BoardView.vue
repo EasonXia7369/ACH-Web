@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import dayjs from 'dayjs'
 import { useIntervalFn } from '@vueuse/core'
@@ -10,6 +10,7 @@ import QRCode from 'qrcode'
 
 import { useClassStore } from '@/stores/class'
 import { dk, STATUS_META } from '@/utils/dates'
+import { desktopBridge } from '@/utils/platform'
 import Icon from '@/components/Icon.vue'
 
 const router = useRouter()
@@ -19,6 +20,39 @@ const store = useClassStore()
 
 const isStudent = computed(() => auth.user?.role === 'student')
 const isAdmin = computed(() => auth.user?.role === 'admin')
+
+/* ---------- 大板自适应缩放：跟随窗口宽度整体缩放（基准 1280 设计宽度） ---------- */
+const BOARD_BASE = 1280
+const boardScaleOn = ref(localStorage.getItem('ark-board-scale') !== '0')
+
+function applyBoardScale() {
+  if (!boardScaleOn.value) return
+  const scale = Math.min(3, Math.max(0.55, window.innerWidth / BOARD_BASE))
+  // 桌面端走 Electron 渲染层缩放（文字清晰、媒体查询响应）；网页端用标准 CSS zoom
+  if (desktopBridge) desktopBridge.setZoom?.(scale)
+  else document.documentElement.style.zoom = String(scale)
+}
+
+function resetBoardScale() {
+  if (desktopBridge) desktopBridge.setZoom?.(1)
+  else document.documentElement.style.zoom = ''
+}
+
+watch(boardScaleOn, (on) => {
+  localStorage.setItem('ark-board-scale', on ? '1' : '0')
+  if (on) applyBoardScale()
+  else resetBoardScale()
+})
+
+onMounted(() => {
+  window.addEventListener('resize', applyBoardScale)
+  applyBoardScale()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', applyBoardScale)
+  resetBoardScale()
+})
 
 /* ---------- 大时钟 ---------- */
 const now = ref(dayjs())
@@ -365,6 +399,14 @@ onMounted(() => {
           <h2><Icon name="homework" :size="17" /> 今日作业</h2>
           <div class="sec-head-r" style="display: flex; align-items: center; gap: 8px">
             <span class="hint">{{ isStudent ? '作业实时展示，点卡片上的按钮登记未交或修改' : '布置后自动放大展示；点卡片按钮登记未交或修改' }}</span>
+            <span class="font-adjust">
+              <button
+                class="gmini"
+                :class="{ on: boardScaleOn }"
+                :title="boardScaleOn ? '大板随窗口大小整体缩放（点击改回固定大小）' : '固定大小（点击开启随窗口自适应缩放）'"
+                @click="boardScaleOn = !boardScaleOn"
+              >自适应缩放</button>
+            </span>
             <span class="font-adjust" title="调整作业内容字号">
               <button class="gmini" @click="setHwFont(-2)">A-</button>
               <span class="font-val">{{ hwFont }}px</span>

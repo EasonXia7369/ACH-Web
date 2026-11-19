@@ -24,6 +24,8 @@ interface ArkDesktopBridge {
   setFullscreen(on: boolean): Promise<void>
   setAlwaysOnTop(on: boolean): Promise<void>
   setAutostart(on: boolean): Promise<boolean>
+  /** 渲染层整体缩放（大板自适应；1.0.2+ 壳提供） */
+  setZoom?(factor: number): void
   webSyncState?(): Promise<ArkWebSyncState>
   checkWebSync?(): Promise<{ updated: boolean; hash?: string; error?: string; skipped?: boolean; reason?: string }>
   /** 桌面壳版本号（1.0.3+ 壳提供） */
