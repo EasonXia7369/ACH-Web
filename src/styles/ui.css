@@ -7,14 +7,14 @@
 /* ---------- 连续曲率圆角（squircle，渐进增强） ----------
  * corner-shape 是 border-radius 的原生扩展（Chrome/Edge 139+）：
  * 阴影/边框/裁剪自动跟随，不支持的浏览器安全降级为普通圆角。
- * 只对较大圆角（≥16px）启用——小圆角下连续曲率感知不明显，省解析。
+ * superellipse(4) 接近 iOS 图标的连续曲率；只对较大圆角（≥16px）启用。
  */
 .glass,
 .glass-strong,
 .gpop,
 .hero-card,
 .ico-tile {
-  corner-shape: superellipse(2.8);
+  corner-shape: superellipse(4);
 }
 
 /* ---------- 玻璃卡片 ---------- */
@@ -36,16 +36,11 @@
   box-shadow: var(--shadow), var(--glass-inset);
 }
 
-/* ---------- 板块图标 tile（iOS 设置页风：彩色 squircle 小方块承载图标） ---------- */
+/* ---------- 板块图标（线性图标直接着板块色，不加底色） ---------- */
 .ico-tile {
-  width: 30px;
-  height: 30px;
-  flex: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 9px;
-  background: var(--tile-bg, var(--primary-soft));
   color: var(--tile-color, var(--primary));
 }
 

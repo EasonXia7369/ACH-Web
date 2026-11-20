@@ -10,7 +10,6 @@ import QRCode from 'qrcode'
 
 import { useClassStore } from '@/stores/class'
 import { dk, STATUS_META } from '@/utils/dates'
-import { desktopBridge } from '@/utils/platform'
 import Icon from '@/components/Icon.vue'
 
 const router = useRouter()
@@ -21,25 +20,24 @@ const store = useClassStore()
 const isStudent = computed(() => auth.user?.role === 'student')
 const isAdmin = computed(() => auth.user?.role === 'admin')
 
-/* ---------- 大板自适应缩放：跟随窗口宽度整体缩放（基准 1280 设计宽度） ----------
- * 桌面端：只通知壳主进程 on/off，缩放由主进程挂在窗口 resize 事件上驱动——
- * webFrame 缩放不会触发窗口 resize，天然避开「缩放→innerWidth 变化→重算→再缩放」的震荡。
- * 网页端：CSS zoom（浏览器对 zoom 的 innerWidth 处理稳定，实测无震荡）。
+/* ---------- 大板自适应缩放：仅缩放 .board 容器内容（基准 1280 设计宽度） ----------
+ * 用元素级 CSS zoom（.board 上），侧栏/顶栏/其他页面完全不受影响；
+ * element zoom 不改变 window.innerWidth，因此 resize 驱动的重算天然收敛、无震荡
+ * （桌面壳与网页端同一实现，壳无需参与）。
  */
 const BOARD_BASE = 1280
 const boardScaleOn = ref(localStorage.getItem('ark-board-scale') !== '0')
+const boardZoom = ref(1)
 let scaleTimer: ReturnType<typeof setTimeout> | null = null
 
 function applyBoardScale() {
-  if (desktopBridge) {
-    desktopBridge.setBoardScale?.(boardScaleOn.value)
+  if (!boardScaleOn.value) {
+    boardZoom.value = 1
     return
   }
-  if (!boardScaleOn.value) return
   const target = Math.min(3, Math.max(0.55, window.innerWidth / BOARD_BASE))
-  const cur = parseFloat(document.documentElement.style.zoom) || 1
-  if (Math.abs(target - cur) < 0.02) return
-  document.documentElement.style.zoom = String(target)
+  if (Math.abs(target - boardZoom.value) < 0.02) return
+  boardZoom.value = target
 }
 
 function scheduleBoardScale() {
@@ -47,19 +45,9 @@ function scheduleBoardScale() {
   scaleTimer = setTimeout(applyBoardScale, 100)
 }
 
-function resetBoardScale() {
-  if (scaleTimer) clearTimeout(scaleTimer)
-  if (desktopBridge) {
-    desktopBridge.setBoardScale?.(false)
-    return
-  }
-  if (document.documentElement.style.zoom) document.documentElement.style.zoom = ''
-}
-
 watch(boardScaleOn, (on) => {
   localStorage.setItem('ark-board-scale', on ? '1' : '0')
-  if (on) applyBoardScale()
-  else resetBoardScale()
+  applyBoardScale()
 })
 
 onMounted(() => {
@@ -69,7 +57,6 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('resize', scheduleBoardScale)
-  resetBoardScale()
 })
 
 /* ---------- 大时钟 ---------- */
@@ -391,7 +378,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="board">
+  <div class="board" :style="{ zoom: boardZoom }">
     <div class="board-main">
       <!-- 第一行：时钟（hero 渐变锚点）+ 寄语 -->
       <div class="row1">
