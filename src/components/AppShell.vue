@@ -221,7 +221,7 @@ onBeforeUnmount(() => chat.reset())
 
     <div class="main-col">
       <!-- 顶栏 -->
-      <header class="topbar">
+      <header class="topbar" :class="{ wide: route.path.startsWith('/board') }">
         <div class="top-left">
           <h1>{{ store.current?.name ?? '班级中心' }}</h1>
           <select
@@ -571,6 +571,10 @@ onBeforeUnmount(() => chat.reset())
   max-width: 1280px;
   width: 100%;
   margin: 0 auto;
+}
+/* 大板路由：顶栏解除限宽，班级名与账号区随内容区铺满对齐 */
+.topbar.wide {
+  max-width: none;
 }
 .top-left {
   display: flex;
