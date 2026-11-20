@@ -20,15 +20,23 @@ const store = useClassStore()
 const isStudent = computed(() => auth.user?.role === 'student')
 const isAdmin = computed(() => auth.user?.role === 'admin')
 
-/* ---------- 大板自适应缩放：仅缩放 .board 容器内容（基准 1280 设计宽度） ----------
- * 用元素级 CSS zoom（.board 上），侧栏/顶栏/其他页面完全不受影响；
- * element zoom 不改变 window.innerWidth，因此 resize 驱动的重算天然收敛、无震荡
- * （桌面壳与网页端同一实现，壳无需参与）。
+/* ---------- 大板自适应缩放：仅缩放 .board 内容（基准 1280 设计宽度） ----------
+ * 用 transform: scale + 宽度补偿（width = 100%/f），纯渲染级缩放：
+ * 布局计算在未缩放坐标系完成，无 CSS zoom 的布局舍入缺失问题；
+ * 侧栏/顶栏/其他页面完全不受影响。origin 左上，宽补偿后视觉宽恰铺满视口。
  */
 const BOARD_BASE = 1280
 const boardScaleOn = ref(localStorage.getItem('ark-board-scale') !== '0')
 const boardZoom = ref(1)
 let scaleTimer: ReturnType<typeof setTimeout> | null = null
+
+const boardStyle = computed(() => {
+  const f = boardZoom.value
+  return {
+    transform: `scale(${f})`,
+    width: `${100 / f}%`,
+  }
+})
 
 function applyBoardScale() {
   if (!boardScaleOn.value) {
@@ -378,7 +386,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="board" :style="{ zoom: boardZoom }">
+  <div class="board" :style="{ ...boardStyle, transformOrigin: 'top left' }">
     <div class="board-main">
       <!-- 第一行：时钟（hero 渐变锚点）+ 寄语 -->
       <div class="row1">

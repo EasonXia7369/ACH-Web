@@ -247,7 +247,7 @@ onBeforeUnmount(() => chat.reset())
         </div>
       </header>
 
-      <main class="content" :class="{ switching }">
+      <main class="content" :class="{ switching, wide: route.path.startsWith('/board') }">
         <RouterView />
       </main>
     </div>
@@ -627,6 +627,10 @@ onBeforeUnmount(() => chat.reset())
   margin: 0 auto;
   padding: 14px 24px 40px;
   transition: opacity 0.15s;
+}
+/* 大板路由解除限宽：展示页铺满剩余宽度（自适应缩放的布局前提） */
+.content.wide {
+  max-width: none;
 }
 .content.switching {
   opacity: 0.4;
