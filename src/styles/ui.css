@@ -4,19 +4,6 @@
  * v3：连续曲率圆角（squircle，渐进增强）、板块图标 tile、hero 卡、错落入场动效
  */
 
-/* ---------- 连续曲率圆角（squircle，渐进增强） ----------
- * corner-shape 是 border-radius 的原生扩展（Chrome/Edge 139+）：
- * 阴影/边框/裁剪自动跟随，不支持的浏览器安全降级为普通圆角。
- * superellipse(4) 接近 iOS 图标的连续曲率；只对较大圆角（≥16px）启用。
- */
-.glass,
-.glass-strong,
-.gpop,
-.hero-card,
-.ico-tile {
-  corner-shape: superellipse(4);
-}
-
 /* ---------- 玻璃卡片 ---------- */
 .glass {
   background: var(--panel);
