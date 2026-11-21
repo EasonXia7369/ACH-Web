@@ -64,14 +64,35 @@ function parentTimeLabel(ts: string) {
   return d.isSame(dayjs(), 'day') ? d.format('HH:mm') : d.format('MM-DD HH:mm')
 }
 
+/** 引用回复：回复必须针对某条家长留言（家长端按孩子过滤，未引用的回复家长看不到） */
+const replyTarget = ref<ParentMsg | null>(null)
+
+function startReply(m: ParentMsg) {
+  replyTarget.value = m
+}
+
+function cancelReply() {
+  replyTarget.value = null
+}
+
+function clipBody(s: string, n = 24): string {
+  const t = s.replace(/\s+/g, ' ').trim()
+  return t.length > n ? t.slice(0, n - 1) + '…' : t
+}
+
 async function sendReply() {
   const body = parentInput.value.trim()
   if (!body || !store.current || sendingReply.value) return
+  if (!replyTarget.value) {
+    error.value = '请先点击某条留言的「回复」，针对该留言回复（家长只能看到与自己孩子相关的对话）'
+    return
+  }
   error.value = ''
   sendingReply.value = true
   try {
-    await chat.sendParentReply(store.current.id, body)
+    await chat.sendParentReply(store.current.id, body, replyTarget.value.id)
     parentInput.value = ''
+    replyTarget.value = null
     notify.beep('sent')
     scrollToChat('parent')
   } catch (e: any) {
@@ -457,8 +478,14 @@ function playVoice(m: ChatMessage) {
             <div class="meta">
               <span class="p-sender" :class="{ 'p-teacher': m.sender_type === 'teacher' }">{{ m.sender_name }}</span>
               <span class="meta-time">{{ parentTimeLabel(m.created_at) }}</span>
+              <button
+                v-if="m.sender_type === 'parent'"
+                class="meta-del p-reply-btn"
+                @click="startReply(m)"
+              >回复</button>
               <button v-if="!isStudent" class="meta-del" @click="deleteParentMsg(m)">删除</button>
             </div>
+            <div v-if="m.reply_name" class="quote-block">回复 <b>{{ m.reply_name }}</b>：{{ clipBody(m.reply_body ?? '') }}</div>
             {{ m.body }}
           </div>
         </div>
@@ -467,8 +494,15 @@ function playVoice(m: ChatMessage) {
         </p>
       </div>
       <p class="foot-note parent-tip">
-        家长通过「管理 → 班级设置 → 家长视图」的链接进入留言；老师回复后，家长刷新页面即可看到。本群组与班级消息互不相通。
+        家长通过「管理 → 班级设置 → 家长视图」的链接进入留言；回复前先点某条留言的「回复」（家长只能看到与自己孩子相关的对话）。本群组与班级消息互不相通。
       </p>
+      <div v-if="!isStudent" class="reply-wrap">
+        <div v-if="replyTarget" class="reply-bar">
+          <span class="reply-quote">回复 <b>{{ replyTarget.sender_name }}</b>：{{ clipBody(replyTarget.body) }}</span>
+          <button class="meta-del" @click="cancelReply">✕</button>
+        </div>
+        <div v-else class="reply-hint">先点某条留言的「回复」，再输入内容（家长只能看到针对自己孩子的回复）</div>
+      </div>
       <div v-if="!isStudent" class="inputbar">
         <input
           v-model="parentInput"
@@ -540,6 +574,62 @@ function playVoice(m: ChatMessage) {
 }
 .parent-tip {
   padding: 6px 16px 0;
+}
+.quote-block {
+  font-size: 11.5px;
+  color: var(--muted);
+  background: var(--field);
+  border-left: 3px solid var(--primary);
+  border-radius: 4px;
+  padding: 4px 8px;
+  margin-bottom: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.quote-block b {
+  color: var(--primary);
+}
+.p-reply-btn {
+  color: var(--primary);
+}
+.p-reply-btn:hover {
+  color: var(--primary);
+}
+.reply-wrap {
+  padding: 0 16px;
+}
+.reply-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--primary-soft);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 12px;
+}
+.reply-bar b {
+  color: var(--primary);
+}
+.reply-quote {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.reply-hint {
+  font-size: 11.5px;
+  color: var(--faint);
+}
+/* 手机端：头部紧凑（说明文字隐藏，只留连接态+群组切换+推送开关） */
+@media (max-width: 860px) {
+  .chat-head .hint {
+    display: none;
+  }
+  .chat-head .push-toggle {
+    margin-left: auto;
+  }
 }
 .conn-dot {
   width: 9px;

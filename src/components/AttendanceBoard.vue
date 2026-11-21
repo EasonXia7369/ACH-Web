@@ -310,6 +310,22 @@ input[type='search'] {
   border-radius: 10px;
   outline: none;
 }
+/* 手机端：日期导航与搜索框分两行，避免压缩重叠 */
+@media (max-width: 860px) {
+  .toolbar {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .datebar {
+    flex: none;
+  }
+  .datewrap {
+    flex: 1 1 auto;
+  }
+  input[type='search'] {
+    width: 100%;
+  }
+}
 .mini {
   padding: 7px 11px;
   border: 1px solid var(--line);

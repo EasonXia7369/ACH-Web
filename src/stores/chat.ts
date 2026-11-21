@@ -25,6 +25,10 @@ export interface ParentMsg {
   sender_name: string
   body: string
   created_at: string
+  /** 老师回复引用的目标留言 id（家长留言无此字段） */
+  reply_to?: number | null
+  reply_name?: string | null
+  reply_body?: string | null
 }
 
 type ConnState = 'off' | 'connecting' | 'open' | 'retrying'
@@ -342,8 +346,11 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
-  async function sendParentReply(cid: number, body: string): Promise<void> {
-    const res = await post<{ message: ParentMsg }>(`/api/classes/${cid}/parent-messages`, { body })
+  async function sendParentReply(cid: number, body: string, replyTo?: number): Promise<void> {
+    const res = await post<{ message: ParentMsg }>(`/api/classes/${cid}/parent-messages`, {
+      body,
+      reply_to: replyTo,
+    })
     if (!parentMessages.value.some((m) => m.id === res.message.id)) {
       parentMessages.value.push(res.message)
     }

@@ -312,6 +312,20 @@ async function exportImage() {
   margin-bottom: 12px;
   flex-wrap: wrap;
 }
+/* 手机端：区间标签独占一行，导航与按钮放下一行 */
+@media (max-width: 860px) {
+  .toolbar .range-label {
+    flex: 1 1 100%;
+    order: -1;
+  }
+  .toolbar .nav {
+    flex: 1;
+  }
+  .toolbar .gmini {
+    flex: 1;
+    text-align: center;
+  }
+}
 .nav {
   width: 36px;
   height: 36px;

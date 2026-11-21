@@ -31,7 +31,9 @@ const msgBody = ref('')
 const sending = ref(false)
 const msgError = ref('')
 const sentOk = ref(false)
-const thread = ref<{ id: number; sender_type: string; sender_name: string; body: string; created_at: string }[]>([])
+const thread = ref<
+  { id: number; sender_type: string; sender_name: string; body: string; created_at: string; reply_name?: string | null; reply_body?: string | null }[]
+>([])
 let threadAfter = 0
 let pollTimer: ReturnType<typeof setInterval> | null = null
 
@@ -170,9 +172,15 @@ function unbind() {
 }
 
 async function loadThread() {
+  // 家长只可见自己孩子相关的对话（自己发的留言 + 针对这些留言的老师回复）；未绑定不拉取
+  if (!bound.value?.no) {
+    thread.value = []
+    threadAfter = 0
+    return
+  }
   try {
     const res = await get<{ messages: any[] }>(
-      `/api/parent/${key.value}/messages?after=${threadAfter}`,
+      `/api/parent/${key.value}/messages?no=${encodeURIComponent(bound.value.no)}&after=${threadAfter}`,
     )
     if (threadAfter === 0) thread.value = res.messages
     else {
@@ -184,6 +192,16 @@ async function loadThread() {
     /* 轮询失败静默，下次再试 */
   }
 }
+
+// 绑定变化 → 对话串重置重拉（绑定成功/解绑/换绑）
+watch(
+  () => bound.value?.no,
+  (no) => {
+    threadAfter = 0
+    thread.value = []
+    loadThread()
+  },
+)
 
 async function sendMsg() {
   const body = msgBody.value.trim()
@@ -211,6 +229,11 @@ async function sendMsg() {
 function msgTime(ts: string) {
   const d = dayjs(ts)
   return d.isSame(dayjs(), 'day') ? d.format('HH:mm') : d.format('MM-DD HH:mm')
+}
+
+function clipBody(s: string, n = 24): string {
+  const t = s.replace(/\s+/g, ' ').trim()
+  return t.length > n ? t.slice(0, n - 1) + '…' : t
 }
 
 // 数据到位后：首拉留言串 + 15s 轮询老师回复
@@ -321,11 +344,14 @@ const weeklyTotals = computed(() => {
                 <b>{{ m.sender_name }}</b>
                 <span>{{ msgTime(m.created_at) }}</span>
               </div>
+              <div v-if="m.reply_name" class="quote-block">
+                回复 <b>{{ m.reply_name }}</b>：{{ clipBody(m.reply_body ?? '') }}
+              </div>
               {{ m.body }}
             </div>
           </div>
         </div>
-        <p v-else class="none">还没有留言，写下第一条吧</p>
+        <p v-else class="none">{{ bound ? '还没有对话，写下第一条吧' : '还没有留言' }}</p>
 
         <div v-if="bound" class="composer">
           <textarea
@@ -665,6 +691,21 @@ h2 {
 .thread-meta b {
   color: var(--primary);
   font-weight: 600;
+}
+.quote-block {
+  font-size: 11.5px;
+  color: var(--muted);
+  background: rgba(0, 0, 0, 0.04);
+  border-left: 3px solid var(--primary);
+  border-radius: 4px;
+  padding: 4px 8px;
+  margin-bottom: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.quote-block b {
+  color: var(--primary);
 }
 .composer {
   display: flex;
