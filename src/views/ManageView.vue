@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { get, post, put, del } from '@/api'
+import { useAi } from '@/composables/useAi'
 import { saveFile } from '@/utils/platform'
 import { useAuthStore } from '@/stores/auth'
 import { useClassStore } from '@/stores/class'
@@ -17,6 +18,7 @@ import QRCode from 'qrcode'
 const route = useRoute()
 const auth = useAuthStore()
 const store = useClassStore()
+const { invalidate: invalidateAi } = useAi()
 
 const isAdmin = computed(() => auth.user?.role === 'admin')
 const isStudent = computed(() => auth.user?.role === 'student')
@@ -107,6 +109,7 @@ type Tab =
   | 'import'
   | 'school'
   | 'gradecmp'
+  | 'ai'
 /* 年级汇总：当前用户可看的年级（教师为主任的年级）——tabs 依赖，须先声明 */
 const gradesMine = ref<Array<{ id: number; name: string; school_name?: string }>>([])
 async function refreshGradesMine() {
@@ -136,9 +139,11 @@ const tabs = computed<Array<{ key: Tab; label: string; icon: string }>>(() => {
     // 校管理员：本校管理一站式（含教师/年级/班级/邀请码）
     base.push({ key: 'school', label: '学校管理', icon: 'users' })
     base.push({ key: 'gradecmp', label: '年级汇总', icon: 'board' })
+    base.push({ key: 'ai', label: 'AI 设置', icon: 'settings' })
   } else if (isPlatformAdmin.value) {
     base.push({ key: 'accounts', label: '账号', icon: 'users' })
     base.push({ key: 'invites', label: '邀请码', icon: 'lock' })
+    base.push({ key: 'ai', label: 'AI 设置', icon: 'settings' })
     base.push({ key: 'school', label: '学校', icon: 'board' })
     base.push({ key: 'gradecmp', label: '年级汇总', icon: 'board' })
     base.push({ key: 'import', label: '数据导入', icon: 'download' })
@@ -158,7 +163,10 @@ function scrollTabIntoView() {
       ?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
   })
 }
-watch(tab, scrollTabIntoView)
+watch(tab, (t) => {
+  scrollTabIntoView()
+  if (t === 'ai') loadAiConfig()
+})
 onMounted(scrollTabIntoView)
 // 可用 tab 集变化（如校管理员无班级时）→ 当前 tab 不在列则回落到第一个；列表渲染后也滚一次
 watch(tabs, (list) => {
@@ -653,6 +661,66 @@ async function doTransfer() {
   await store.loadClasses()
 }
 
+/* ---------- AI 设置（管理员） ---------- */
+const aiCfg = ref<any>(null)
+const aiBaseUrl = ref('')
+const aiModel = ref('')
+const aiApiKey = ref('')
+const aiSaving = ref(false)
+const aiTestBusy = ref(false)
+const aiTestResult = ref<{ ok: boolean; msg: string } | null>(null)
+
+async function loadAiConfig() {
+  aiCfg.value = null
+  try {
+    const res = await get<any>('/api/ai/config')
+    aiCfg.value = res
+    aiBaseUrl.value = res.custom?.baseUrl ?? ''
+    aiModel.value = res.custom?.model ?? ''
+    aiApiKey.value = ''
+    aiTestResult.value = null
+  } catch (e: any) {
+    toast(e.message)
+  }
+}
+
+async function saveAiConfig() {
+  aiSaving.value = true
+  try {
+    const res = await put<any>('/api/ai/config', {
+      apiKey: aiApiKey.value.trim(),
+      baseUrl: aiBaseUrl.value.trim(),
+      model: aiModel.value.trim(),
+    })
+    toast(res.cleared ? '已清除自配渠道' : 'AI 配置已保存')
+    invalidateAi()
+    await loadAiConfig()
+  } catch (e: any) {
+    toast(e.message)
+  } finally {
+    aiSaving.value = false
+  }
+}
+
+async function testAiConfig() {
+  aiTestBusy.value = true
+  aiTestResult.value = null
+  try {
+    const res = await post<{ ok: boolean; sample?: string; error?: string }>('/api/ai/config/test', {
+      apiKey: aiApiKey.value.trim(),
+      baseUrl: aiBaseUrl.value.trim(),
+      model: aiModel.value.trim(),
+    })
+    aiTestResult.value = res.ok
+      ? { ok: true, msg: `连通正常，模型回复：${res.sample ?? ''}` }
+      : { ok: false, msg: res.error ?? '测试失败' }
+  } catch (e: any) {
+    aiTestResult.value = { ok: false, msg: e.message }
+  } finally {
+    aiTestBusy.value = false
+  }
+}
+
 onMounted(() => {
   initSettings()
   if (isAdmin.value) {
@@ -840,6 +908,51 @@ onMounted(() => {
       </div>
     </div>
     <AuditPanel v-else-if="tab === 'audit' && store.current" :class-id="store.current.id" />
+
+    <!-- AI 设置（管理员） -->
+    <div v-else-if="tab === 'ai'" class="glass pad">
+      <h3 class="sec-title">AI 设置</h3>
+      <p class="foot-note" style="margin: 0 0 14px">
+        配置 OpenAI 兼容接口（DeepSeek / 通义 / Kimi / GLM / 本地 Ollama 均可）。配置保存在服务器数据库，优先于部署级配置；清空 Base URL 保存则清除自配渠道。未配置且平台支持 Workers AI 时，AI 功能自动回落到内置免费额度。
+      </p>
+
+      <div v-if="aiCfg" class="ai-status-row">
+        <span class="foot-note">当前状态：</span>
+        <span v-if="aiCfg.enabled" class="ok-text">
+          已启用 · 渠道：{{ aiCfg.source === 'db' ? '管理页配置' : aiCfg.source === 'env' ? '部署级配置' : 'Workers AI 内置' }}
+        </span>
+        <span v-else class="err">未启用（各 AI 入口已隐藏）</span>
+        <span v-if="aiCfg.workersAiAvailable" class="foot-note">· Workers AI 兜底可用</span>
+      </div>
+
+      <label class="flabel">Base URL（OpenAI 兼容，如 https://api.deepseek.com/v1）</label>
+      <input v-model="aiBaseUrl" class="ginput" style="width: 100%" placeholder="https://api.deepseek.com/v1" />
+
+      <label class="flabel">API Key {{ aiCfg?.custom?.keyMask ? '（已配置 ' + aiCfg.custom.keyMask + '，留空保持不变）' : '' }}</label>
+      <input
+        v-model="aiApiKey"
+        class="ginput"
+        style="width: 100%"
+        type="password"
+        :placeholder="aiCfg?.custom?.keyMask ? '留空保持已配置的 Key' : 'sk-...'"
+        autocomplete="new-password"
+      />
+
+      <label class="flabel">模型名（如 deepseek-chat / qwen-max / glm-4-flash）</label>
+      <input v-model="aiModel" class="ginput" style="width: 100%" placeholder="deepseek-chat" />
+
+      <div class="row" style="margin-top: 14px">
+        <button class="gmini" :disabled="aiTestBusy" @click="testAiConfig">{{ aiTestBusy ? '测试中…' : '测试连接' }}</button>
+        <button class="gbtn primary" :disabled="aiSaving" @click="saveAiConfig">{{ aiSaving ? '保存中…' : '保存配置' }}</button>
+      </div>
+      <p v-if="aiTestResult" :class="aiTestResult.ok ? 'ok-text' : 'err'" style="margin: 10px 0 0">
+        {{ aiTestResult.ok ? '✔ ' + aiTestResult.msg : '✘ ' + aiTestResult.msg }}
+      </p>
+
+      <p class="foot-note" style="margin-top: 16px">
+        隐私口径：学生统计类数据发送给 AI 前一律脱敏姓名；仅「成绩智能导入」按设计发送成绩单原文（导入页有知情提示）。所有 AI 均为教师手动触发，无自动调用。
+      </p>
+    </div>
 
     <template v-if="tab === 'school'">
       <!-- 校管理员：本校一站式；平台超管：学校列表与创建 -->

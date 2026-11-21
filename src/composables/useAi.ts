@@ -16,5 +16,10 @@ export function useAi() {
       enabled.value = false
     }
   }
-  return { aiEnabled: enabled, ensureStatus }
+  /** 保存 AI 配置后调用：强制下次拉取最新状态 */
+  function invalidate() {
+    fetched = false
+    enabled.value = null
+  }
+  return { aiEnabled: enabled, ensureStatus, invalidate }
 }
