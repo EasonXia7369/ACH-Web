@@ -18,6 +18,15 @@ export interface ChatMessage {
   created_at: string
 }
 
+/** 家长留言（家长 ↔ 老师，独立于班级聊天的第二个群组；无媒体） */
+export interface ParentMsg {
+  id: number
+  sender_type: 'parent' | 'teacher'
+  sender_name: string
+  body: string
+  created_at: string
+}
+
 type ConnState = 'off' | 'connecting' | 'open' | 'retrying'
 
 /** 离线待发队列条目（仅文字；媒体文件不入 localStorage） */
@@ -29,6 +38,7 @@ interface PendingMsg {
 
 const QUEUE_KEY = 'ark-msg-queue'
 const SEEN_PREFIX = 'ark-seen-'
+const PARENT_SEEN_PREFIX = 'ark-pseen-'
 
 /**
  * 班级消息群（班主任 ↔ 值日生一体机）。
@@ -43,6 +53,9 @@ export const useChatStore = defineStore('chat', () => {
   const messages = ref<ChatMessage[]>([])
   const conn = ref<ConnState>('off')
   const unread = ref(0)
+  /** 家长留言群组：消息列表 + 未读（打开家长留言组时清零，水位存 localStorage） */
+  const parentMessages = ref<ParentMsg[]>([])
+  const parentUnread = ref(0)
   /** 收到数据变更广播或上线全量同步时 +1，各板块监听后重拉 */
   const refreshTick = ref(0)
   const popup = ref<ChatMessage | null>(null) // 大板全屏弹出卡片（收到的老师消息）
@@ -66,6 +79,22 @@ export const useChatStore = defineStore('chat', () => {
   }
   function markSeenId(cid: number, id: number): void {
     if (id > seenId(cid)) localStorage.setItem(SEEN_PREFIX + cid, String(id))
+  }
+
+  /* ---------- 家长留言已读水位 ---------- */
+
+  function parentSeenId(cid: number): number {
+    return Number(localStorage.getItem(PARENT_SEEN_PREFIX + cid) ?? 0)
+  }
+  function markParentSeen(cid: number, id: number): void {
+    if (id > parentSeenId(cid)) localStorage.setItem(PARENT_SEEN_PREFIX + cid, String(id))
+  }
+  /** 打开「家长留言」组时清零未读 */
+  function markAllParentRead(): void {
+    parentUnread.value = 0
+    if (classId && parentMessages.value.length) {
+      markParentSeen(classId, parentMessages.value[parentMessages.value.length - 1].id)
+    }
   }
 
   /* ---------- 离线待发队列 ---------- */
@@ -119,6 +148,8 @@ export const useChatStore = defineStore('chat', () => {
     classId = 0
     messages.value = []
     unread.value = 0
+    parentMessages.value = []
+    parentUnread.value = 0
     popup.value = null
     conn.value = 'off'
     manuallyClosed = false
@@ -194,6 +225,20 @@ export const useChatStore = defineStore('chat', () => {
         }
         if (data.type === 'message-deleted') {
           messages.value = messages.value.filter((x) => x.id !== data.id)
+          return
+        }
+        if (data.type === 'parent-message-deleted') {
+          parentMessages.value = parentMessages.value.filter((x) => x.id !== data.id)
+          return
+        }
+        if (data.type === 'parent-message') {
+          const m = data.message as ParentMsg
+          if (!parentMessages.value.some((x) => x.id === m.id)) {
+            parentMessages.value.push(m)
+            // 家长留言不打断大板（不弹窗/不响铃），只累计未读，打开家长留言组时清零
+            if (m.id > parentSeenId(cid)) parentUnread.value++
+            markParentSeen(cid, m.id)
+          }
           return
         }
         if (data.type === 'message') {
@@ -274,6 +319,43 @@ export const useChatStore = defineStore('chat', () => {
     messages.value = messages.value.filter((x) => x.id !== msgId)
   }
 
+  /* ---------- 家长留言（第二个群组） ---------- */
+
+  /** 家长留言历史 / 增量；全量时对比水位恢复未读。 */
+  async function loadParentHistory(cid: number, after = 0): Promise<void> {
+    const res = await get<{ messages: ParentMsg[] }>(
+      `/api/classes/${cid}/parent-messages?after=${after}`,
+    )
+    if (after === 0) {
+      parentMessages.value = res.messages
+      const stored = parentSeenId(cid)
+      if (stored > 0) {
+        const fresh = res.messages.filter((m) => m.id > stored)
+        if (fresh.length) parentUnread.value += fresh.length
+      }
+    } else if (res.messages.length) {
+      const seen = new Set(parentMessages.value.map((m) => m.id))
+      for (const m of res.messages) if (!seen.has(m.id)) parentMessages.value.push(m)
+    }
+    if (parentMessages.value.length) {
+      markParentSeen(cid, parentMessages.value[parentMessages.value.length - 1].id)
+    }
+  }
+
+  async function sendParentReply(cid: number, body: string): Promise<void> {
+    const res = await post<{ message: ParentMsg }>(`/api/classes/${cid}/parent-messages`, { body })
+    if (!parentMessages.value.some((m) => m.id === res.message.id)) {
+      parentMessages.value.push(res.message)
+    }
+    markParentSeen(cid, res.message.id)
+  }
+
+  async function deleteParentMessage(cid: number, msgId: number): Promise<void> {
+    const { del } = await import('@/api')
+    await del(`/api/classes/${cid}/parent-messages/${msgId}`)
+    parentMessages.value = parentMessages.value.filter((x) => x.id !== msgId)
+  }
+
   function markAllRead(): void {
     unread.value = 0
     if (classId) markSeenId(classId, maxId())
@@ -298,6 +380,8 @@ export const useChatStore = defineStore('chat', () => {
     messages,
     conn,
     unread,
+    parentMessages,
+    parentUnread,
     refreshTick,
     popup,
     offlineSummary,
@@ -310,6 +394,10 @@ export const useChatStore = defineStore('chat', () => {
     deleteMessage,
     markAllRead,
     markSeenId,
+    loadParentHistory,
+    sendParentReply,
+    deleteParentMessage,
+    markAllParentRead,
     flushQueue,
     mediaSrc,
   }

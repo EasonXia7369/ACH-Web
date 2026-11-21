@@ -264,6 +264,7 @@ async function load() {
 }
 
 watch(() => store.current?.id, load, { immediate: true })
+watch(() => store.current?.id, loadParentInfo, { immediate: true })
 // 班级或寄语配置变化 / 轮换桶推进（切换周期到点）→ 重取一言（内置来源会被置空回退）
 watch(() => [store.current?.id, store.current?.quote_config, quoteBucket.value], loadQuote, { immediate: true })
 // 其他设备变更了作业/考勤/值日 → 自动重拉
@@ -309,34 +310,53 @@ async function saveTask() {
   await load()
 }
 
-// 家长视图快捷入口
+// 家长视图快捷入口（常驻小卡：班级码+二维码，点击放大）
   const showParent = ref(false)
   const parentLink = ref('')
   const parentQr = ref('')
+  const parentCode = ref('')
+  const parentQrBig = ref('')
 
-  async function openParent() {
+  async function loadParentInfo() {
     if (!store.current) return
-    showParent.value = true
     try {
       const detail = await get('/api/classes/' + store.current.id)
       const k = detail.class?.parent_key ?? detail.parent_key ?? null
+      parentCode.value = detail.class?.class_code ?? detail.class_code ?? ''
       if (k) {
         parentLink.value = 'https://ach.macrostar.top/parent/' + k
-        parentQr.value = await QRCode.toDataURL(parentLink.value, { width: 320, margin: 2 })
+        parentQr.value = await QRCode.toDataURL(parentLink.value, { width: 160, margin: 1 })
+        parentQrBig.value = await QRCode.toDataURL(parentLink.value, { width: 320, margin: 2 })
       } else {
         parentLink.value = ''
         parentQr.value = ''
+        parentQrBig.value = ''
       }
     } catch {
       parentLink.value = ''
     }
   }
 
+  async function openParent() {
+    showParent.value = true
+    if (!parentQrBig.value) await loadParentInfo()
+  }
+
   async function genParentHere() {
     if (!store.current) return
     const res = await post('/api/classes/' + store.current.id + '/parent-link', {})
     parentLink.value = 'https://ach.macrostar.top/parent/' + res.key
-    parentQr.value = await QRCode.toDataURL(parentLink.value, { width: 320, margin: 2 })
+    parentCode.value = res.code ?? parentCode.value
+    parentQr.value = await QRCode.toDataURL(parentLink.value, { width: 160, margin: 1 })
+    parentQrBig.value = await QRCode.toDataURL(parentLink.value, { width: 320, margin: 2 })
+  }
+
+  /** 重置班级码（弹层内；链接不受影响） */
+  async function resetCodeHere() {
+    if (!store.current) return
+    const res = await post('/api/classes/' + store.current.id + '/class-code', {})
+    parentCode.value = res.code
+    toast('班级码已重置：' + res.code)
   }
 
   async function copyParentHere() {
@@ -521,14 +541,6 @@ onMounted(() => {
         <p v-else class="none">今天没有课程安排</p>
       </div>
 
-      <div class="glass parent-card">
-        <div class="sec-head">
-          <h2><span class="ico-tile" style="--tile-color: var(--tile-msg); --tile-bg: var(--tile-msg-bg)"><Icon name="users" :size="15" /></span> 家长视图</h2>
-        </div>
-        <p class="foot-note" style="margin: 0 0 10px">脱敏后的作业/出勤只读页，链接发家长群即可。</p>
-        <button class="gbtn primary" style="width: 100%" @click="openParent">查看二维码与链接</button>
-      </div>
-
       <div class="glass duty-card">
         <div class="sec-head">
           <h2><span class="ico-tile" style="--tile-color: var(--tile-attend); --tile-bg: var(--tile-attend-bg)"><Icon name="users" :size="15" /></span> 今日值日生</h2>
@@ -543,6 +555,16 @@ onMounted(() => {
           调整值日表
         </button>
       </div>
+
+      <!-- 家长入口卡：班级码 + 二维码（家长会/开放日直接拍照） -->
+      <button v-if="parentQr" class="glass parent-card" @click="openParent">
+        <img :src="parentQr" alt="家长入口二维码" class="parent-qr-mini" />
+        <div class="parent-card-info">
+          <span class="parent-card-title">家长入口</span>
+          <span class="parent-card-code num">{{ parentCode || '——' }}</span>
+          <span class="parent-card-hint">扫码或输码进入 · 点击放大</span>
+        </div>
+      </button>
     </div>
   </div>
 
@@ -550,14 +572,17 @@ onMounted(() => {
   <Teleport to="body">
     <div v-if="showParent" class="gbackdrop" @click.self="showParent = false">
       <div class="gpop" style="text-align: center">
-        <h3 class="sec-title" style="font-size: 16px">家长视图</h3>
-        <p class="foot-note" style="margin: 0 0 12px">家长扫码或打开链接，可查看脱敏后的作业与出勤（无需登录）。</p>
-        <img v-if="parentQr" :src="parentQr" alt="家长视图二维码" style="width: min(320px, 80vw); border-radius: 12px" />
+        <h3 class="sec-title" style="font-size: 16px">家长入口</h3>
+        <p class="foot-note" style="margin: 0 0 12px">家长扫码进班，输孩子学号绑定：查 TA 的出勤、给老师留言（无需登录）。</p>
+        <img v-if="parentQrBig" :src="parentQrBig" alt="家长入口二维码" style="width: min(300px, 76vw); border-radius: 12px" />
         <p v-else class="empty" style="padding: 20px 0">正在生成…</p>
+        <div v-if="parentCode" class="code-banner num">{{ parentCode }}</div>
+        <p class="foot-note" style="margin: 6px 0 0">家长也可打开网站首页输上面的班级码进入</p>
         <p v-if="parentLink" class="parent-link num">{{ parentLink }}</p>
-        <div class="pop-acts" style="display: flex; gap: 8px; justify-content: center; margin-top: 12px">
+        <div class="pop-acts" style="display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-top: 12px">
           <button v-if="parentLink" class="gbtn" @click="copyParentHere">复制链接</button>
-          <button v-if="!parentLink" class="gbtn" @click="genParentHere">生成链接</button>
+          <button v-if="parentCode" class="gbtn" @click="resetCodeHere">重置班级码</button>
+          <button v-if="!parentLink" class="gbtn" @click="genParentHere">生成入口</button>
           <button class="gbtn primary" @click="showParent = false">完成</button>
         </div>
       </div>
@@ -926,7 +951,61 @@ onMounted(() => {
 }
 
 .parent-card {
-  padding: 18px 20px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 18px;
+  text-align: left;
+  cursor: pointer;
+  font-family: inherit;
+  color: var(--text);
+  transition: transform var(--dur-fast) var(--ease-spring);
+}
+.parent-card:hover {
+  background: var(--field-hover);
+}
+.parent-card:active {
+  transform: scale(0.98);
+}
+.parent-qr-mini {
+  width: 72px;
+  height: 72px;
+  border-radius: 10px;
+  flex: none;
+  background: #fff;
+  padding: 4px;
+}
+.parent-card-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.parent-card-title {
+  font-size: 13.5px;
+  font-weight: 600;
+}
+.parent-card-code {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--primary);
+  line-height: 1.2;
+}
+.parent-card-hint {
+  font-size: 11px;
+  color: var(--faint);
+}
+.code-banner {
+  display: inline-block;
+  margin: 10px auto 0;
+  padding: 8px 22px;
+  border-radius: 12px;
+  background: var(--primary-soft);
+  color: var(--primary);
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: 0.22em;
 }
 .parent-link {
   font-size: 12.5px;

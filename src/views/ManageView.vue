@@ -171,19 +171,21 @@ const newPass2 = ref('')
 /* 备份/恢复 */
 const restoreInput = ref<HTMLInputElement | null>(null)
 
-/* 家长链接（班主任） */
+/* 家长链接 + 班级码（班主任） */
 const parentKey = ref('')
 const parentLink = ref('')
 const parentQr = ref('')
+const classCode = ref('')
 
 async function genParentLink() {
   if (!store.current) return
   try {
-    const res = await post<{ key: string }>('/api/classes/' + store.current.id + '/parent-link', {})
+    const res = await post<{ key: string; code: string }>('/api/classes/' + store.current.id + '/parent-link', {})
     parentKey.value = res.key
+    classCode.value = res.code
     parentLink.value = 'https://ach.macrostar.top/parent/' + res.key
     parentQr.value = await QRCode.toDataURL(parentLink.value, { width: 320, margin: 2 })
-    toast('家长链接已生成')
+    toast('家长链接与班级码已生成')
   } catch (e: any) {
     toast(e.message)
   }
@@ -198,11 +200,34 @@ async function copyParentLink() {
   }
 }
 
+async function copyClassCode() {
+  try {
+    await navigator.clipboard.writeText(classCode.value)
+    toast('班级码已复制')
+  } catch {
+    toast('复制失败，请手动选择')
+  }
+}
+
+/** 重置班级码：旧码立即失效（链接不受影响） */
+async function resetClassCode() {
+  if (!store.current) return
+  if (!confirm('重置班级码？旧的班级码立即失效（家长链接不受影响）。')) return
+  try {
+    const res = await post<{ code: string }>('/api/classes/' + store.current.id + '/class-code', {})
+    classCode.value = res.code
+    toast('班级码已重置：' + res.code)
+  } catch (e: any) {
+    toast(e.message)
+  }
+}
+
 async function refreshParentLink() {
   if (!store.current) return
   try {
     const detail = await get<any>('/api/classes/' + store.current.id)
     const k = detail.class?.parent_key ?? detail.parent_key ?? null
+    classCode.value = detail.class?.class_code ?? detail.class_code ?? ''
     if (k) {
       parentKey.value = k
       parentLink.value = 'https://ach.macrostar.top/parent/' + k
@@ -726,15 +751,21 @@ onMounted(() => {
       </div>
       <button class="gbtn primary" style="margin-top: 12px" @click="saveQuoteConfig">保存寄语设置</button>
 
-      <h3 class="sec-title" style="margin-top: 20px">家长视图（只读链接）</h3>
-      <p class="foot-note" style="margin: 0 0 8px">家长打开链接可查看脱敏后的今日作业/课程/出勤与本周汇总（学生姓名仅显示姓氏和拼音首字母）。聊天消息不对家长开放。</p>
+      <h3 class="sec-title" style="margin-top: 20px">家长视图（脱敏链接）</h3>
+      <p class="foot-note" style="margin: 0 0 8px">家长打开链接可查看脱敏后的今日作业/课程/出勤与本周汇总（学生姓名仅显示姓氏和拼音首字母），并可给老师留言。留言进入消息页的「家长留言」组，与班级消息相互独立；老师回复后家长刷新页面可见。</p>
       <div v-if="parentQr" class="parent-box">
         <img :src="parentQr" alt="家长视图二维码" class="parent-qr" />
         <div style="flex: 1; min-width: 0">
+          <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px">
+            <span class="foot-note" style="flex: none">班级码</span>
+            <b class="code-big num">{{ classCode || '—' }}</b>
+            <button v-if="classCode" class="gmini" @click="copyClassCode">复制</button>
+            <button v-if="classCode" class="gmini danger" @click="resetClassCode">重置</button>
+          </div>
           <input class="ginput" style="width: 100%" readonly :value="parentLink" @focus="($event.target as HTMLInputElement).select()" />
           <div style="display: flex; gap: 8px; margin-top: 8px">
             <button class="gmini" @click="copyParentLink">复制链接</button>
-            <button class="gmini" @click="genParentLink">重新生成（旧链接失效）</button>
+            <button class="gmini" @click="genParentLink">重新生成链接（旧链接失效）</button>
           </div>
         </div>
       </div>

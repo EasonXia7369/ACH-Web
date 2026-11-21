@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import dayjs from 'dayjs'
-import { get } from '@/api'
+import { get, post } from '@/api'
 import { SLOT_LABEL } from '@/utils/dates'
 
 const route = useRoute()
@@ -12,20 +12,6 @@ const data = ref<any>(null)
 const error = ref('')
 const loading = ref(false)
 
-async function load() {
-  loading.value = true
-  error.value = ''
-  try {
-    data.value = await get<any>(`/api/parent/${key.value}`)
-  } catch (e: any) {
-    error.value = e.message
-  } finally {
-    loading.value = false
-  }
-}
-
-watch(key, load, { immediate: true })
-
 const STATUS: Record<string, { label: string; cls: string }> = {
   present: { label: '出勤', cls: 'st-present' },
   leave: { label: '请假', cls: 'st-leave' },
@@ -33,6 +19,158 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   absent: { label: '旷课', cls: 'st-absent' },
   violate: { label: '违纪', cls: 'st-violate' },
 }
+
+/* ---------- 绑定孩子（学号）+ 给老师留言 ---------- */
+const RELATIONS = ['爸爸', '妈妈', '爷爷', '奶奶', '外公', '外婆', '其他']
+const bound = ref<{ id: number; name: string; no: string } | null>(null)
+const bindNo = ref('')
+const bindError = ref('')
+const bindBusy = ref(false)
+const relation = ref('妈妈')
+const msgBody = ref('')
+const sending = ref(false)
+const msgError = ref('')
+const sentOk = ref(false)
+const thread = ref<{ id: number; sender_type: string; sender_name: string; body: string; created_at: string }[]>([])
+let threadAfter = 0
+let pollTimer: ReturnType<typeof setInterval> | null = null
+
+const LS_BIND = 'ark-pbind-'
+const LS_REL = 'ark-prel-'
+
+function rememberIdentity() {
+  if (bound.value) {
+    localStorage.setItem(LS_BIND + key.value, JSON.stringify({ no: bound.value.no }))
+  }
+  localStorage.setItem(LS_REL + key.value, relation.value)
+}
+
+/** 主接口加载：带学号时出勤个人化；以服务端回执 bound_student 为准（学号可能已失效） */
+async function load() {
+  loading.value = true
+  error.value = ''
+  try {
+    const cur = bound.value
+    const q = cur ? `?no=${encodeURIComponent(cur.no)}` : ''
+    data.value = await get<any>(`/api/parent/${key.value}${q}`)
+    const bs = data.value?.bound_student
+    if (cur && !bs) {
+      // 记住的学号已失效（被改/学生停用）→ 回到未绑定态
+      bound.value = null
+      localStorage.removeItem(LS_BIND + key.value)
+      bindError.value = '之前绑定的学号已失效，请重新输入'
+    } else if (bs) {
+      bound.value = { id: bs.id, name: bs.name, no: cur?.no ?? '' }
+    }
+  } catch (e: any) {
+    error.value = e.message
+  } finally {
+    loading.value = false
+  }
+}
+
+watch(key, () => {
+  bound.value = null
+  bindNo.value = ''
+  bindError.value = ''
+  const rel = localStorage.getItem(LS_REL + key.value)
+  if (rel && RELATIONS.includes(rel)) relation.value = rel
+  const saved = localStorage.getItem(LS_BIND + key.value)
+  if (saved) {
+    try {
+      const b = JSON.parse(saved)
+      if (b?.no) bound.value = { id: 0, name: '', no: String(b.no) }
+    } catch {
+      /* 忽略坏数据 */
+    }
+  }
+  load()
+}, { immediate: true })
+
+/** 输学号绑定：lookup 即时确认，防止留言到别人孩子头上 */
+async function bindByNo() {
+  const no = bindNo.value.trim()
+  if (!no || bindBusy.value) return
+  bindError.value = ''
+  bindBusy.value = true
+  try {
+    const res = await get<{ student: { id: number; name: string } }>(
+      `/api/parent/${key.value}/lookup?no=${encodeURIComponent(no)}`,
+    )
+    bound.value = { id: res.student.id, name: res.student.name, no }
+    rememberIdentity()
+    await load()
+  } catch (e: any) {
+    bindError.value = e.message
+  } finally {
+    bindBusy.value = false
+  }
+}
+
+function unbind() {
+  bound.value = null
+  bindNo.value = ''
+  localStorage.removeItem(LS_BIND + key.value)
+  bindError.value = ''
+  load()
+}
+
+async function loadThread() {
+  try {
+    const res = await get<{ messages: any[] }>(
+      `/api/parent/${key.value}/messages?after=${threadAfter}`,
+    )
+    if (threadAfter === 0) thread.value = res.messages
+    else {
+      const seen = new Set(thread.value.map((m) => m.id))
+      for (const m of res.messages) if (!seen.has(m.id)) thread.value.push(m)
+    }
+    if (thread.value.length) threadAfter = thread.value[thread.value.length - 1].id
+  } catch {
+    /* 轮询失败静默，下次再试 */
+  }
+}
+
+async function sendMsg() {
+  const body = msgBody.value.trim()
+  if (!body || !bound.value || sending.value) return
+  msgError.value = ''
+  sending.value = true
+  try {
+    await post(`/api/parent/${key.value}/messages`, {
+      body,
+      relation: relation.value,
+      student_no: bound.value.no,
+    })
+    msgBody.value = ''
+    rememberIdentity()
+    sentOk.value = true
+    setTimeout(() => (sentOk.value = false), 2500)
+    await loadThread()
+  } catch (e: any) {
+    msgError.value = e.message
+  } finally {
+    sending.value = false
+  }
+}
+
+function msgTime(ts: string) {
+  const d = dayjs(ts)
+  return d.isSame(dayjs(), 'day') ? d.format('HH:mm') : d.format('MM-DD HH:mm')
+}
+
+// 数据到位后：首拉留言串 + 15s 轮询老师回复
+watch(
+  () => data.value?.class_name,
+  () => {
+    loadThread()
+    if (!pollTimer) pollTimer = setInterval(loadThread, 15_000)
+  },
+)
+
+onBeforeUnmount(() => {
+  if (pollTimer) clearInterval(pollTimer)
+})
 
 const weeklyTotals = computed(() => {
   if (!data.value?.weekly) return { leave: 0, late: 0, absent: 0, violate: 0 }
@@ -73,13 +211,90 @@ const weeklyTotals = computed(() => {
       </div>
       <h1>{{ data?.class_name ?? '' }}</h1>
       <p class="date-line" v-if="data">{{ data.day }}（{{ dayjs(data.day).format('dddd') }}）家长视图</p>
-      <p class="privacy-note">学生姓名已脱敏，仅班主任与家长可对应。本页为只读视图，实时更新。</p>
+      <p class="privacy-note">学生姓名已脱敏，仅班主任与家长可对应。本页可查看班级信息，也可给老师留言（与班级消息相互独立）。</p>
     </header>
 
     <div v-if="loading" class="state">加载中…</div>
     <div v-else-if="error" class="state err">{{ error }}</div>
 
     <template v-if="data">
+      <!-- 给老师留言（绑定孩子后可用） -->
+      <section class="card msg-card">
+        <h2>给老师留言</h2>
+
+        <!-- 未绑定：输学号绑定 -->
+        <div v-if="!bound" class="bind-box">
+          <p class="hint" style="margin: 0 0 8px">
+            输入孩子的学号完成绑定——之后这里显示 TA 的出勤，留言也署名给 TA：
+          </p>
+          <div class="compose-row">
+            <input
+              v-model="bindNo"
+              class="ginput bind-input"
+              placeholder="孩子的学号（问班主任要）"
+              maxlength="32"
+              @keyup.enter="bindByNo"
+            />
+            <button class="send-btn" :disabled="bindBusy || !bindNo.trim()" @click="bindByNo">
+              {{ bindBusy ? '查询中…' : '绑定' }}
+            </button>
+          </div>
+          <p v-if="bindError" class="err" style="margin: 8px 0 0">{{ bindError }}</p>
+        </div>
+
+        <!-- 已绑定 -->
+        <div v-else class="bound-bar">
+          <span class="bound-label">已绑定</span>
+          <b class="bound-name">{{ bound.name }}</b>
+          <select v-model="relation" class="gselect rel-sel" @change="rememberIdentity">
+            <option v-for="r in RELATIONS" :key="r" :value="r">{{ r }}</option>
+          </select>
+          <button class="gmini" @click="unbind">更换</button>
+        </div>
+
+        <div v-if="thread.length" class="thread">
+          <div
+            v-for="m in thread"
+            :key="m.id"
+            class="thread-row"
+            :class="{ 'is-teacher': m.sender_type === 'teacher' }"
+          >
+            <div class="thread-bubble">
+              <div class="thread-meta">
+                <b>{{ m.sender_name }}</b>
+                <span>{{ msgTime(m.created_at) }}</span>
+              </div>
+              {{ m.body }}
+            </div>
+          </div>
+        </div>
+        <p v-else class="none">还没有留言，写下第一条吧</p>
+
+        <div v-if="bound" class="composer">
+          <textarea
+            v-model="msgBody"
+            class="gtextarea compose-text"
+            rows="3"
+            maxlength="500"
+            placeholder="给老师留言（500 字以内）…"
+            :disabled="sending"
+          ></textarea>
+          <div class="compose-actions">
+            <span class="hint">署名为脱敏名字 + 身份，老师对应得到真实家长</span>
+            <button class="send-btn" :disabled="sending || !msgBody.trim()" @click="sendMsg">
+              {{ sending ? '发送中…' : '发送留言' }}
+            </button>
+          </div>
+          <p v-if="msgError" class="err" style="margin: 8px 0 0">{{ msgError }}</p>
+          <p v-if="sentOk" class="ok-text" style="margin: 8px 0 0; font-size: 12.5px">
+            已发送，老师会在消息页的「家长留言」里看到，回复后这里会自动显示
+          </p>
+        </div>
+        <p v-else class="foot-note" style="margin: 12px 0 0">
+          绑定孩子后即可给老师留言。
+        </p>
+      </section>
+
       <!-- 今日作业 -->
       <section class="card">
         <h2>今日作业</h2>
@@ -105,30 +320,29 @@ const weeklyTotals = computed(() => {
         <p v-else class="none">今天没有课程</p>
       </section>
 
-      <!-- 今日出勤 -->
+      <!-- 今日出勤（个人化：仅绑定的孩子） -->
       <section class="card">
-        <h2>今日出勤</h2>
+        <h2>今日出勤<span v-if="bound" class="bound-suffix"> · {{ bound.name }}</span></h2>
         <div v-if="data.attendance_today.length" class="att-list">
           <div v-for="(a, i) in data.attendance_today" :key="i" class="att-item" :class="STATUS[a.status]?.cls">
-            <span class="att-student">{{ a.student }}</span>
             <span>{{ SLOT_LABEL[a.slot] }}</span>
             <span>{{ STATUS[a.status]?.label }}</span>
             <span v-if="a.note" class="att-note">{{ a.note }}</span>
           </div>
         </div>
-        <p v-else class="none">今天全员正常出勤</p>
+        <p v-else class="none">{{ bound ? bound.name + ' 今天没有出勤记录（一切正常）' : '绑定孩子后查看 TA 的今日出勤' }}</p>
       </section>
 
-      <!-- 本周汇总 -->
+      <!-- 本周汇总（个人化） -->
       <section class="card">
-        <h2>本周汇总</h2>
+        <h2>本周汇总<span v-if="bound" class="bound-suffix"> · {{ bound.name }}</span></h2>
         <div v-if="weeklyTotals.leave + weeklyTotals.late + weeklyTotals.absent + weeklyTotals.violate > 0" class="week-grid">
           <div class="week-item"><b class="n-leave">{{ weeklyTotals.leave }}</b><span>请假</span></div>
           <div class="week-item"><b class="n-late">{{ weeklyTotals.late }}</b><span>迟到</span></div>
           <div class="week-item"><b class="n-absent">{{ weeklyTotals.absent }}</b><span>旷课</span></div>
           <div class="week-item"><b class="n-violate">{{ weeklyTotals.violate }}</b><span>违纪</span></div>
         </div>
-        <p v-else class="none">本周全勤</p>
+        <p v-else class="none">{{ bound ? bound.name + ' 本周全勤' : '绑定孩子后查看 TA 的本周汇总' }}</p>
       </section>
 
       <footer class="foot">方舟班级中心 · Ark Class Hub</footer>
@@ -312,6 +526,141 @@ h2 {
   color: var(--faint);
   font-size: 13px;
   margin: 4px 0 0;
+}
+/* ---------- 给老师留言 ---------- */
+.msg-card h2 {
+  margin-bottom: 8px;
+}
+.thread {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 300px;
+  overflow-y: auto;
+  margin-bottom: 12px;
+  padding-right: 4px;
+}
+.thread-row {
+  display: flex;
+}
+.thread-row.is-teacher {
+  justify-content: flex-end;
+}
+.thread-bubble {
+  max-width: 82%;
+  background: var(--field);
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 14px 14px 14px 4px;
+  padding: 8px 12px;
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.thread-row.is-teacher .thread-bubble {
+  background: rgba(0, 122, 255, 0.09);
+  border-color: rgba(0, 122, 255, 0.35);
+  border-radius: 14px 14px 4px 14px;
+}
+.thread-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 10.5px;
+  color: var(--faint);
+  margin-bottom: 3px;
+}
+.thread-meta b {
+  color: var(--primary);
+  font-weight: 600;
+}
+.composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+/* ---------- 绑定孩子 ---------- */
+.bind-box {
+  background: var(--field);
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 12px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.bind-input {
+  flex: 1;
+  min-width: 0;
+}
+.bound-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  background: rgba(52, 199, 89, 0.1);
+  border: 1px solid rgba(52, 199, 89, 0.4);
+  border-radius: 12px;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+.bound-label {
+  font-size: 12px;
+  color: var(--present);
+  font-weight: 700;
+}
+.bound-name {
+  font-size: 15px;
+  color: var(--text);
+}
+.rel-sel {
+  width: auto;
+  padding: 4px 8px;
+  font-size: 13px;
+}
+.bound-suffix {
+  font-size: 12.5px;
+  color: var(--muted);
+  font-weight: 500;
+}
+.compose-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.compose-sel {
+  flex: 1;
+  min-width: 120px;
+}
+.compose-text {
+  width: 100%;
+}
+.compose-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.send-btn {
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  border: none;
+  background: var(--primary);
+  color: #fff;
+  padding: 9px 18px;
+  border-radius: 10px;
+  transition: 0.15s;
+}
+.send-btn:hover {
+  background: var(--primary-dark);
+}
+.send-btn:active {
+  transform: scale(0.96);
+}
+.send-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 .state {
   text-align: center;

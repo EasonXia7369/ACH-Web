@@ -65,6 +65,109 @@ async function setActive(s: any, active: boolean) {
   await refresh()
 }
 
+/* ---------- 学号（家长凭学号在共享链接里绑定孩子） ---------- */
+const noDraft = ref<Record<number, string>>({})
+
+function noOf(s: any): string {
+  return noDraft.value[s.id] ?? s.student_no ?? ''
+}
+
+function onNoChange(s: any, ev: Event) {
+  const val = (ev.target as HTMLInputElement).value
+  noDraft.value[s.id] = val
+  saveNo(s)
+}
+
+async function saveNo(s: any) {
+  const val = (noDraft.value[s.id] ?? s.student_no ?? '').trim()
+  if (val === (s.student_no ?? '').trim()) return
+  try {
+    await put(`/api/classes/${store.current!.id}/students/${s.id}`, {
+      student_no: val || null,
+    })
+    await refresh()
+    delete noDraft.value[s.id]
+    toast(val ? `已保存 ${s.name} 的学号 ${val}` : `已清空 ${s.name} 的学号`)
+  } catch (e: any) {
+    error.value = e.message
+    noDraft.value[s.id] = s.student_no ?? '' // 失败还原输入框
+  }
+}
+
+/** 批量学号弹窗：纯学号按名单顺序；「学号 姓名」两列按姓名对号入座 */
+const showNos = ref(false)
+const nosText = ref('')
+const nosParsed = ref<Array<{ stu: any; no: string }> | null>(null)
+const nosNote = ref('')
+const nosImporting = ref(false)
+
+function parseNos() {
+  const rows = nosText.value.split(/\r?\n/).map((l) => l.trim()).filter(Boolean)
+  const actives = store.students.filter((s) => s.active)
+  const result: Array<{ stu: any; no: string }> = []
+  const errors: string[] = []
+  const byName = new Map(actives.map((s) => [s.name, s]))
+  const usedNo = new Set<string>()
+  // 任一行带两列 → 整篇按姓名匹配；否则纯学号按顺序
+  const namedMode = rows.some((l) => l.split(/[\t,，\s]+/).filter(Boolean).length >= 2)
+  let orderIdx = 0
+  for (const line of rows) {
+    const parts = line.split(/[\t,，\s]+/).map((x) => x.trim()).filter(Boolean)
+    if (!parts.length) continue
+    let stu: any
+    let no: string
+    if (namedMode) {
+      const namePart = parts.find((p) => /^[\u4e00-\u9fa5a-zA-Z·]{2,4}$/.test(p))
+      no = parts.find((p) => p !== namePart) ?? ''
+      stu = namePart ? byName.get(namePart) : null
+      if (!stu || !no) {
+        errors.push(line)
+        continue
+      }
+    } else {
+      no = parts[0]
+      stu = actives[orderIdx++]
+      if (!stu) {
+        errors.push(`${line}（超出名单人数）`)
+        continue
+      }
+    }
+    if (usedNo.has(no)) {
+      errors.push(`${no}（重复）`)
+      continue
+    }
+    usedNo.add(no)
+    result.push({ stu, no })
+  }
+  nosParsed.value = result
+  nosNote.value = errors.length
+    ? `已忽略 ${errors.length} 行：${errors.slice(0, 3).join('；')}${errors.length > 3 ? '…' : ''}`
+    : namedMode
+      ? ''
+      : `按名单顺序填入前 ${result.length} 人`
+}
+
+async function confirmNos() {
+  if (!nosParsed.value?.length) return
+  nosImporting.value = true
+  error.value = ''
+  const count = nosParsed.value.length
+  try {
+    await post(`/api/classes/${store.current!.id}/students/numbers`, {
+      nos: nosParsed.value.map((r) => ({ id: r.stu.id, student_no: r.no })),
+    })
+    await refresh()
+    showNos.value = false
+    nosText.value = ''
+    nosParsed.value = null
+    toast(`已保存 ${count} 个学号`)
+  } catch (e: any) {
+    error.value = e.message
+  } finally {
+    nosImporting.value = false
+  }
+}
+
 /* ---------- 批量导入 ---------- */
 const showImport = ref(false)
 const importMode = ref<'paste' | 'file'>('paste')
@@ -216,6 +319,9 @@ async function confirmImport() {
         maxlength="20"
         @keyup.enter="add"
       />
+      <button class="gbtn" @click="showNos = true; nosText = ''; nosParsed = null; nosNote = ''">
+        <Icon name="users" :size="15" /> 批量填学号
+      </button>
       <button class="gbtn" @click="showImport = true; parsedNames = []; pasteText = ''; importResult = null">
         <Icon name="upload" :size="15" /> 批量导入
       </button>
@@ -242,6 +348,14 @@ async function confirmImport() {
         </template>
         <template v-else>
           <span class="stu-name">{{ s.name }}</span>
+          <input
+            class="ginput no-input"
+            :value="noOf(s)"
+            placeholder="学号（选填）"
+            maxlength="32"
+            @change="onNoChange(s, $event)"
+            @keyup.enter="($event.target as HTMLInputElement).blur()"
+          />
           <span class="stu-initial">{{ initialOf(s) }}</span>
           <span v-if="!s.active" class="off-badge">已停用</span>
           <button class="gmini" @click="startEdit(s)">改名</button>
@@ -251,7 +365,7 @@ async function confirmImport() {
       </div>
     </div>
     <p class="foot-note" style="margin: 10px 2px 0">
-      停用不是删除：历史考勤与作业记录保留，名单里不再显示；转学/退班用停用。
+      学号给家长在「家长视图」链接里绑定孩子用（格式不限、班内唯一）；停用不是删除：历史考勤与作业记录保留，名单里不再显示；转学/退班用停用。
     </p>
   </div>
 
@@ -301,6 +415,38 @@ async function confirmImport() {
           >
             <Icon name="download" :size="15" />
             导入 {{ parsedNames.length || '' }} 人
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
+
+  <!-- 批量填学号弹窗 -->
+  <Teleport to="body">
+    <div v-if="showNos" class="gbackdrop" @click.self="showNos = false">
+      <div class="gpop" style="width: min(560px, 94vw)">
+        <h3 class="sec-title">批量填学号</h3>
+        <p class="foot-note" style="margin: 8px 0 6px">
+          每行一个学号（按名单顺序填入）；也支持「学号 姓名」两列，按姓名对号入座。学号格式不限，家长用它绑定孩子。
+        </p>
+        <textarea
+          v-model="nosText"
+          class="gtextarea"
+          style="width: 100%; min-height: 160px"
+          placeholder="例如：&#10;20250101&#10;20250102&#10;&#10;或：&#10;20250101 张三&#10;20250102 李四"
+          @input="parseNos"
+        ></textarea>
+        <p v-if="nosNote" class="foot-note" style="margin: 6px 0 0">{{ nosNote }}</p>
+        <div v-if="nosParsed?.length" class="preview">
+          <span class="foot-note">将保存 <b>{{ nosParsed.length }}</b> 个学号：</span>
+          <div class="name-chips">
+            <span v-for="r in nosParsed" :key="r.stu.id" class="name-chip">{{ r.stu.name }} → {{ r.no }}</span>
+          </div>
+        </div>
+        <div class="import-acts">
+          <button class="gbtn" @click="showNos = false">取消</button>
+          <button class="gbtn primary" :disabled="nosImporting || !nosParsed?.length" @click="confirmNos">
+            保存{{ nosParsed?.length || '' }} 个学号
           </button>
         </div>
       </div>
@@ -361,6 +507,12 @@ async function confirmImport() {
   font-size: 11.5px;
   width: 24px;
   text-align: center;
+  flex: none;
+}
+.no-input {
+  width: 130px;
+  padding: 4px 8px;
+  font-size: 12.5px;
   flex: none;
 }
 .off-badge {

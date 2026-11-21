@@ -25,7 +25,14 @@ export const router = createRouter({
       component: () => import('@/views/AboutView.vue'),
     },
     {
-      // 家长只读视图（脱敏）
+      // 家长入口页：输 6 位班级码进入班级视图
+      path: '/parent',
+      name: 'parent-gate',
+      component: () => import('@/views/ParentGate.vue'),
+      meta: { public: true },
+    },
+    {
+      // 家长视图（脱敏）：凭链接或班级码进入，学号绑定孩子
       path: '/parent/:key',
       name: 'parent',
       component: () => import('@/views/ParentView.vue'),

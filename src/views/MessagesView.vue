@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import { get } from '@/api'
 import dayjs from 'dayjs'
 import { useAuthStore } from '@/stores/auth'
 import { useClassStore } from '@/stores/class'
-import { useChatStore, type ChatMessage } from '@/stores/chat'
+import { useChatStore, type ChatMessage, type ParentMsg } from '@/stores/chat'
 import { useNotify } from '@/composables/useNotify'
 import { usePush } from '@/composables/usePush'
 import Icon from '@/components/Icon.vue'
@@ -12,6 +13,7 @@ import Icon from '@/components/Icon.vue'
 const auth = useAuthStore()
 const store = useClassStore()
 const chat = useChatStore()
+const route = useRoute()
 const notify = useNotify()
 const {
   supported: pushSupported,
@@ -35,6 +37,63 @@ function togglePopup() {
 }
 
 const isStudent = computed(() => auth.user?.role === 'student')
+
+/* ---------- 群组切换：班级消息 / 家长留言（推送通知 ?tab=parent 直达） ---------- */
+const activeTab = ref<'class' | 'parent'>(route.query.tab === 'parent' ? 'parent' : 'class')
+const parentListEl = ref<HTMLElement | null>(null)
+const parentInput = ref('')
+const sendingReply = ref(false)
+
+function scrollToChat(target: 'class' | 'parent' = 'class') {
+  const el = target === 'class' ? listEl.value : parentListEl.value
+  nextTick(() => el?.scrollTo({ top: el.scrollHeight, behavior: 'smooth' }))
+}
+
+function switchTab(t: 'class' | 'parent') {
+  activeTab.value = t
+  if (t === 'parent') {
+    chat.markAllParentRead()
+    scrollToChat('parent')
+  } else {
+    scrollToChat('class')
+  }
+}
+
+function parentTimeLabel(ts: string) {
+  const d = dayjs(ts)
+  return d.isSame(dayjs(), 'day') ? d.format('HH:mm') : d.format('MM-DD HH:mm')
+}
+
+async function sendReply() {
+  const body = parentInput.value.trim()
+  if (!body || !store.current || sendingReply.value) return
+  error.value = ''
+  sendingReply.value = true
+  try {
+    await chat.sendParentReply(store.current.id, body)
+    parentInput.value = ''
+    notify.beep('sent')
+    scrollToChat('parent')
+  } catch (e: any) {
+    error.value = e.message
+  } finally {
+    sendingReply.value = false
+  }
+}
+
+async function deleteParentMsg(m: ParentMsg) {
+  if (!confirm('删除这条留言？删除后家长端也不再显示。')) return
+  await chat.deleteParentMessage(store.current!.id, m.id)
+}
+
+// 家长留言组开着时，新留言直接视为已读（徽标只在其他组/页面累计）
+watch(
+  () => [chat.parentUnread, activeTab.value] as const,
+  ([unread, tab]) => {
+    if (unread > 0 && tab === 'parent') chat.markAllParentRead()
+  },
+)
+
 const listEl = ref<HTMLElement | null>(null)
 const input = ref('')
 const sending = ref(false)
@@ -84,8 +143,10 @@ onMounted(async () => {
   }
   if (store.current) {
     await chat.loadHistory(store.current.id).catch(() => {})
+    await chat.loadParentHistory(store.current.id).catch(() => {})
     chat.connect(store.current.id, onIncoming)
-    scrollToBottom()
+    if (activeTab.value === 'parent') chat.markAllParentRead()
+    scrollToChat(activeTab.value)
   }
 })
 
@@ -95,8 +156,10 @@ watch(
     if (!cid) return
     chat.reset()
     await chat.loadHistory(cid).catch(() => {})
+    await chat.loadParentHistory(cid).catch(() => {})
     chat.connect(cid, onIncoming)
-    scrollToBottom()
+    if (activeTab.value === 'parent') chat.markAllParentRead()
+    scrollToChat(activeTab.value)
   },
 )
 
@@ -283,7 +346,15 @@ function playVoice(m: ChatMessage) {
       <span class="conn-text">
         {{ chat.conn === 'open' ? '实时连接' : chat.conn === 'retrying' ? '重连中…' : chat.conn === 'connecting' ? '连接中…' : '未连接' }}
       </span>
-      <span class="hint">{{ isStudent ? '发消息给老师' : '发消息到教室大屏' }}</span>
+      <div class="gseg chat-tabs">
+        <button :class="{ on: activeTab === 'class' }" @click="switchTab('class')">班级消息</button>
+        <button :class="{ on: activeTab === 'parent' }" @click="switchTab('parent')">
+          家长留言<span v-if="chat.parentUnread" class="tab-badge">{{ chat.parentUnread > 99 ? '99+' : chat.parentUnread }}</span>
+        </button>
+      </div>
+      <span class="hint">
+        {{ activeTab === 'parent' ? '家长 ↔ 老师，与班级消息相互独立' : isStudent ? '发消息给老师' : '发消息到教室大屏' }}
+      </span>
       <button
         v-if="pushVisible"
         class="gbtn icon push-toggle"
@@ -296,6 +367,7 @@ function playVoice(m: ChatMessage) {
       </button>
     </div>
 
+    <template v-if="activeTab === 'class'">
     <div ref="listEl" class="chat-list" @scroll.passive>
       <div
         v-for="m in chat.messages"
@@ -370,6 +442,48 @@ function playVoice(m: ChatMessage) {
       </button>
     </div>
     <p v-if="recording" class="foot-note rec-hint">● 录音中 {{ recordSeconds }}s / 60s —— 点麦克风结束并发送</p>
+    </template>
+
+    <!-- 家长留言群组：家长 ↔ 老师，独立于班级聊天 -->
+    <template v-else>
+      <div ref="parentListEl" class="chat-list" @scroll.passive>
+        <div
+          v-for="m in chat.parentMessages"
+          :key="m.id"
+          class="msg-row"
+          :class="{ mine: m.sender_type === 'teacher' }"
+        >
+          <div class="bubble">
+            <div class="meta">
+              <span class="p-sender" :class="{ 'p-teacher': m.sender_type === 'teacher' }">{{ m.sender_name }}</span>
+              <span class="meta-time">{{ parentTimeLabel(m.created_at) }}</span>
+              <button v-if="!isStudent" class="meta-del" @click="deleteParentMsg(m)">删除</button>
+            </div>
+            {{ m.body }}
+          </div>
+        </div>
+        <p v-if="!chat.parentMessages.length" class="empty" style="text-align: center; padding: 24px 0">
+          还没有家长留言。家长打开班级的「家长视图」链接即可留言。
+        </p>
+      </div>
+      <p class="foot-note parent-tip">
+        家长通过「管理 → 班级设置 → 家长视图」的链接进入留言；老师回复后，家长刷新页面即可看到。本群组与班级消息互不相通。
+      </p>
+      <div v-if="!isStudent" class="inputbar">
+        <input
+          v-model="parentInput"
+          class="ginput flex1"
+          placeholder="回复家长…"
+          maxlength="500"
+          @keyup.enter="sendReply"
+        />
+        <button class="gbtn primary" :disabled="sendingReply || !parentInput.trim()" @click="sendReply">
+          <Icon name="send" :size="16" /> 回复
+        </button>
+      </div>
+      <div v-else class="inputbar"><span class="hint" style="margin: 0 auto">老师在这里回复家长</span></div>
+    </template>
+
     <p v-if="error || recordError" class="err">{{ error || recordError }}</p>
     <div v-if="toastMsg" class="gtoast">{{ toastMsg }}</div>
   </div>
@@ -397,6 +511,35 @@ function playVoice(m: ChatMessage) {
   gap: 8px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.chat-tabs button {
+  position: relative;
+}
+.tab-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 5px;
+  margin-left: 5px;
+  border-radius: 999px;
+  background: var(--tile-msg, var(--absent));
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.p-sender {
+  color: var(--tile-msg, var(--primary));
+  font-weight: 600;
+}
+.p-teacher {
+  color: var(--primary);
+}
+.parent-tip {
+  padding: 6px 16px 0;
 }
 .conn-dot {
   width: 9px;
