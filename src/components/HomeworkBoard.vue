@@ -16,7 +16,7 @@ const auth = useAuthStore()
 
 const isStudent = computed(() => auth.user?.role === 'student')
 
-const sub = ref<'miss' | 'task'>('miss')
+const sub = ref<'miss' | 'task' | 'history'>('miss')
 
 /* ---------- 作业未交 ---------- */
 const day = ref(dk())
@@ -227,12 +227,84 @@ function loadTask(t: any) {
   taskSubject.value = t.subject
   taskContent.value = t.content
 }
+
+/* ---------- 历史作业（按天分组查看区间内布置过的作业） ---------- */
+const histFrom = ref(dayjs().subtract(29, 'day').format('YYYY-MM-DD'))
+const histTo = ref(dk())
+const histTasks = ref<Array<{ day: string; weekday: string; items: any[] }>>([])
+const histLoading = ref(false)
+
+async function loadHistory() {
+  if (!dateOk(histFrom.value) || !dateOk(histTo.value) || histFrom.value > histTo.value) return
+  histLoading.value = true
+  try {
+    const res = await get<any>(
+      `/api/classes/${props.classId}/hw-tasks?from=${histFrom.value}&to=${histTo.value}`,
+    )
+    const map = new Map<string, any[]>()
+    for (const t of res.tasks) {
+      const arr = map.get(t.day) ?? []
+      arr.push(t)
+      map.set(t.day, arr)
+    }
+    histTasks.value = [...map.entries()]
+      .map(([day, items]) => ({ day, weekday: weekdayCn(day), items }))
+      .sort((a, b) => b.day.localeCompare(a.day))
+  } finally {
+    histLoading.value = false
+  }
+}
+
+function dateOk(v: string | null | undefined): boolean {
+  return !!v && /^\d{4}-\d{2}-\d{2}$/.test(v)
+}
+
+function histQuick(kind: '7d' | '30d' | 'month') {
+  histTo.value = dk()
+  histFrom.value =
+    kind === '7d'
+      ? dayjs().subtract(6, 'day').format('YYYY-MM-DD')
+      : kind === '30d'
+        ? dayjs().subtract(29, 'day').format('YYYY-MM-DD')
+        : dayjs().startOf('month').format('YYYY-MM-DD')
+  loadHistory()
+}
+
+function editHist(t: any) {
+  loadTask(t)
+  sub.value = 'task'
+}
+
+async function deleteHist(t: any) {
+  if (!confirm(`删除 ${t.day} ${t.subject} 的作业布置？`)) return
+  await put(`/api/classes/${props.classId}/hw-tasks`, {
+    day: t.day,
+    subject: t.subject,
+    content: '',
+  })
+  await loadHistory()
+  toastHist(`已删除 ${t.day} ${t.subject}`)
+}
+
+const histToast = ref('')
+function toastHist(msg: string) {
+  histToast.value = msg
+  setTimeout(() => (histToast.value = ''), 2000)
+}
+
+watch(sub, (v) => {
+  if (v === 'history' && !histTasks.value.length) loadHistory()
+})
+watch([histFrom, histTo], () => {
+  if (sub.value === 'history' && dateOk(histFrom.value) && dateOk(histTo.value)) loadHistory()
+})
 </script>
 
 <template>
   <div class="subbar">
     <button :class="{ on: sub === 'miss' }" @click="sub = 'miss'">作业未交</button>
     <button :class="{ on: sub === 'task' }" @click="sub = 'task'">作业布置</button>
+    <button :class="{ on: sub === 'history' }" @click="sub = 'history'">历史作业</button>
   </div>
 
   <!-- ======== 作业未交 ======== -->
@@ -325,7 +397,7 @@ function loadTask(t: any) {
   </template>
 
   <!-- ======== 作业布置（学生为只读视图） ======== -->
-  <template v-else>
+  <template v-else-if="sub === 'task'">
     <div class="card toolbar">
       <input v-model="taskDay" type="date" />
       <button class="mini" @click="taskDay = dk()">今天</button>
@@ -381,6 +453,38 @@ function loadTask(t: any) {
       <p v-else class="empty">该区间没有布置过作业</p>
     </div>
   </template>
+
+  <!-- ======== 历史作业（按天分组查看区间内布置过的作业） ======== -->
+  <template v-if="sub === 'history'">
+    <div class="card toolbar">
+      <input v-model="histFrom" type="date" />
+      <span class="hint">至</span>
+      <input v-model="histTo" type="date" />
+      <button class="mini" @click="histQuick('7d')">近7天</button>
+      <button class="mini" @click="histQuick('30d')">近30天</button>
+      <button class="mini" @click="histQuick('month')">本月</button>
+    </div>
+
+    <p v-if="histLoading" class="card pad empty">加载中…</p>
+    <div v-else-if="histTasks.length" class="hist-list">
+      <div v-for="g in histTasks" :key="g.day" class="card pad hist-day">
+        <h3 class="sec-title">{{ g.day }} <em>{{ g.weekday }}</em></h3>
+        <div v-for="t in g.items" :key="t.subject" class="hist-row">
+          <b class="hist-subj">{{ t.subject }}</b>
+          <span class="hist-content">{{ t.content || '—' }}</span>
+          <div v-if="!isStudent" class="rec-acts">
+            <button class="gmini" @click="editHist(t)">编辑</button>
+            <button class="gmini danger" @click="deleteHist(t)">删除</button>
+          </div>
+        </div>
+      </div>
+      <p class="foot-note" style="margin: 10px 2px 0">
+        编辑会跳到「作业布置」并回填对应日期；删除 = 清空该科作业（历史记录保留原软删标记）。
+      </p>
+    </div>
+    <p v-else class="card pad empty">该区间没有布置过作业</p>
+    <div v-if="histToast" class="gtoast">{{ histToast }}</div>
+  </template>
 </template>
 
 <style scoped>
@@ -396,11 +500,33 @@ function loadTask(t: any) {
   padding: 6px 14px;
   border-radius: 8px;
   font-size: 12.5px;
-  font-weight: 700;
-  color: var(--muted);
-  border: none;
-  background: none;
-  cursor: pointer;
+}
+/* ---------- 历史作业 ---------- */
+.hist-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.hist-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--line-soft);
+  flex-wrap: wrap;
+}
+.hist-row:last-child {
+  border-bottom: none;
+}
+.hist-subj {
+  color: var(--primary);
+  flex: none;
+  width: 56px;
+}
+.hist-content {
+  flex: 1;
+  min-width: 200px;
+  line-height: 1.6;
 }
 .subbar button.on {
   background: var(--field);
