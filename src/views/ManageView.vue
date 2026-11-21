@@ -222,6 +222,18 @@ async function resetClassCode() {
   }
 }
 
+/** 已有链接但还没有班级码的班：单独发码，不动链接 */
+async function genClassCodeOnly() {
+  if (!store.current) return
+  try {
+    const res = await post<{ code: string }>('/api/classes/' + store.current.id + '/class-code', {})
+    classCode.value = res.code
+    toast('班级码已生成：' + res.code)
+  } catch (e: any) {
+    toast(e.message)
+  }
+}
+
 async function refreshParentLink() {
   if (!store.current) return
   try {
@@ -761,6 +773,7 @@ onMounted(() => {
             <b class="code-big num">{{ classCode || '—' }}</b>
             <button v-if="classCode" class="gmini" @click="copyClassCode">复制</button>
             <button v-if="classCode" class="gmini danger" @click="resetClassCode">重置</button>
+            <button v-else class="gmini" @click="genClassCodeOnly">生成班级码</button>
           </div>
           <input class="ginput" style="width: 100%" readonly :value="parentLink" @focus="($event.target as HTMLInputElement).select()" />
           <div style="display: flex; gap: 8px; margin-top: 8px">
