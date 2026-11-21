@@ -62,6 +62,12 @@ export const router = createRouter({
       component: () => import('@/views/HomeworkView.vue'),
     },
     {
+      // 考试成绩板块（教师全权；家长凭学号绑定后在家长视图查看自己孩子）
+      path: '/exams',
+      name: 'exams',
+      component: () => import('@/views/ExamsView.vue'),
+    },
+    {
       path: '/messages',
       name: 'messages',
       component: () => import('@/views/MessagesView.vue'),

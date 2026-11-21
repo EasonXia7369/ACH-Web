@@ -59,8 +59,10 @@ async function load() {
       bound.value = null
       localStorage.removeItem(LS_BIND + key.value)
       bindError.value = '之前绑定的学号已失效，请重新输入'
+      examData.value = null
     } else if (bs) {
       bound.value = { id: bs.id, name: bs.name, no: cur?.no ?? '' }
+      loadExams()
     }
   } catch (e: any) {
     error.value = e.message
@@ -68,6 +70,52 @@ async function load() {
     loading.value = false
   }
 }
+
+/* ---------- 孩子的成绩（仅绑定后可见：分数+趋势+班级均值，无排名） ---------- */
+const examData = ref<{ student: { name: string }; exams: any[] } | null>(null)
+const showAllExams = ref(false)
+
+async function loadExams() {
+  if (!bound.value?.no) {
+    examData.value = null
+    return
+  }
+  try {
+    examData.value = await get<any>(
+      `/api/parent/${key.value}/exams?no=${encodeURIComponent(bound.value.no)}`,
+    )
+  } catch {
+    examData.value = null
+  }
+}
+
+/** 与孩子上一场考试的同一科目比较：↑ 进步 / ↓ 退步 */
+function deltaOf(examIdx: number, subject: string): number | null {
+  if (!examData.value) return null
+  const list = examData.value.exams
+  const cur = list[examIdx]?.scores?.[subject]?.score
+  if (cur === null || cur === undefined || examIdx === 0) return null
+  const prev = list[examIdx - 1]?.scores?.[subject]?.score
+  if (prev === null || prev === undefined) return null
+  return Math.round((cur - prev) * 10) / 10
+}
+
+/** 渲染模型：每场考试展开为 {sub, score, full, avg, delta} 行 */
+const examView = computed(() => {
+  if (!examData.value) return []
+  return examData.value.exams.map((e: any, ei: number) => ({
+    id: e.id,
+    name: e.name,
+    day: e.day,
+    rows: Object.entries(e.scores).map(([sub, v]: [string, any]) => ({
+      sub,
+      score: v.score as number | null,
+      full: v.full as number,
+      avg: v.avg as number | null,
+      delta: deltaOf(ei, sub),
+    })),
+  }))
+})
 
 watch(key, () => {
   bound.value = null
@@ -355,6 +403,40 @@ const weeklyTotals = computed(() => {
         <p v-else class="none">{{ bound ? bound.name + ' 本周全勤' : '本周全班全勤' }}</p>
       </section>
 
+      <!-- 考试成绩（绑定后可见：仅自己孩子，含班级均值对比，不含排名） -->
+      <section v-if="bound && examData" class="card">
+        <h2>考试成绩<span class="bound-suffix"> · {{ examData.student.name }}</span></h2>
+        <div v-if="examData.exams.length" class="exam-list">
+          <div
+            v-for="e in showAllExams ? examView : examView.slice(-3)"
+            :key="e.id"
+            class="pexam"
+          >
+            <div class="pexam-head">
+              <b>{{ e.name }}</b>
+              <span class="hint">{{ e.day }}</span>
+            </div>
+            <div class="pexam-rows">
+              <div v-for="row in e.rows" :key="row.sub" class="pexam-row">
+                <span class="pexam-subj">{{ row.sub }}</span>
+                <span class="num pexam-score">{{ row.score ?? '缺考' }}<i v-if="row.score !== null" class="pexam-full"> / {{ row.full }}</i></span>
+                <span class="hint num">
+                  班级均分 {{ row.avg ?? '—' }}
+                  <b v-if="row.delta !== null" :class="row.delta >= 0 ? 'delta-up' : 'delta-down'">
+                    {{ row.delta >= 0 ? '↑' : '↓' }}{{ Math.abs(row.delta) }}
+                  </b>
+                </span>
+              </div>
+            </div>
+          </div>
+          <button v-if="examData.exams.length > 3 && !showAllExams" class="gmini" @click="showAllExams = true">
+            查看更早的 {{ examData.exams.length - 3 }} 场考试
+          </button>
+        </div>
+        <p v-else class="none">还没有考试记录</p>
+        <p class="foot-note" style="margin: 10px 0 0">仅展示 {{ examData.student.name }} 的成绩与班级均值对比，不含排名。</p>
+      </section>
+
       <footer class="foot">方舟班级中心 · Ark Class Hub</footer>
     </template>
   </div>
@@ -636,6 +718,56 @@ h2 {
   font-size: 12.5px;
   color: var(--muted);
   font-weight: 500;
+}
+/* ---------- 考试成绩卡 ---------- */
+.exam-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.pexam {
+  background: var(--field);
+  border: 1px solid rgba(0, 0, 0, 0.07);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.pexam-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.pexam-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.pexam-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 13.5px;
+  flex-wrap: wrap;
+}
+.pexam-subj {
+  width: 52px;
+  flex: none;
+  color: var(--muted);
+}
+.pexam-score {
+  font-weight: 700;
+}
+.pexam-full {
+  font-style: normal;
+  font-weight: 400;
+  color: var(--faint);
+  font-size: 11px;
+}
+.delta-up {
+  color: var(--present);
+}
+.delta-down {
+  color: var(--absent);
 }
 .compose-row {
   display: flex;

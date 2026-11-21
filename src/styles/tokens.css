@@ -57,6 +57,8 @@
   --tile-msg-bg: rgba(255, 55, 95, 0.16);
   --tile-manage: #bf5af2;
   --tile-manage-bg: rgba(191, 90, 242, 0.16);
+  --tile-exam: #40c8e0;
+  --tile-exam-bg: rgba(64, 200, 224, 0.16);
 
   /* 首页 hero 卡（时钟）：全页唯一渐变面 */
   --hero-grad: linear-gradient(135deg, #0a5cff 0%, #3a5be0 55%, #5e5ce6 100%);
@@ -120,6 +122,8 @@
   --tile-msg-bg: rgba(255, 45, 85, 0.1);
   --tile-manage: #af52de;
   --tile-manage-bg: rgba(175, 82, 222, 0.11);
+  --tile-exam: #30b0c7;
+  --tile-exam-bg: rgba(48, 176, 199, 0.12);
 
   /* 首页 hero 卡（时钟）：全页唯一渐变面 */
   --hero-grad: linear-gradient(135deg, #007aff 0%, #2f6bff 55%, #5856d6 100%);

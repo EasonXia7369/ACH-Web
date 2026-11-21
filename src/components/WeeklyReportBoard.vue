@@ -1,15 +1,18 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import dayjs from 'dayjs'
-import { get } from '@/api'
+import { get, post } from '@/api'
 import { useClassStore } from '@/stores/class'
 import { exportXlsx } from '@/utils/xlsx'
 import { saveFile } from '@/utils/platform'
 import { weekdayCn } from '@/utils/dates'
+import { useAi } from '@/composables/useAi'
 import Icon from '@/components/Icon.vue'
 
 const props = defineProps<{ classId: number }>()
 const store = useClassStore()
+const { aiEnabled, ensureStatus } = useAi()
+ensureStatus()
 
 const monday = ref(dayjs().startOf('week').add(1, 'day').format('YYYY-MM-DD'))
 const report = ref<any>(null)
@@ -37,6 +40,40 @@ async function load() {
 }
 
 watch([monday, props.classId], load, { immediate: true })
+
+/* ---------- AI 周总结 ---------- */
+const aiText = ref('')
+const aiBusy = ref(false)
+const aiError = ref('')
+
+async function genSummary() {
+  if (aiBusy.value) return
+  aiBusy.value = true
+  aiError.value = ''
+  aiText.value = ''
+  try {
+    const res = await post<{ text: string }>(`/api/classes/${props.classId}/report/summary`, {
+      from: from.value,
+      to: to.value,
+    })
+    aiText.value = res.text
+  } catch (e: any) {
+    aiError.value = e.message
+  } finally {
+    aiBusy.value = false
+  }
+}
+
+async function copyAiText() {
+  try {
+    await navigator.clipboard.writeText(aiText.value)
+    toastMsg.value = '已复制'
+    setTimeout(() => (toastMsg.value = ''), 1800)
+  } catch {
+    toastMsg.value = '复制失败，请手动选择文本'
+  }
+}
+const toastMsg = ref('')
 
 async function exportXlsxReport() {
   const r = report.value
@@ -187,6 +224,27 @@ async function exportImage() {
     <span class="range-label">{{ rangeLabel }}（{{ weekdayCn(from) }} ~ {{ weekdayCn(to) }}）</span>
     <button class="nav" @click="shiftWeek(1)">›</button>
     <button class="gmini" @click="monday = dayjs().startOf('week').add(1, 'day').format('YYYY-MM-DD')">本周</button>
+    <button
+      v-if="aiEnabled"
+      class="gmini ai-btn"
+      :disabled="aiBusy"
+      :title="'AI 生成本周总结，可直接复制发家长群'"
+      @click="genSummary"
+    >
+      <Icon name="quote" :size="13" /> {{ aiBusy ? 'AI 写作中…' : 'AI 总结' }}
+    </button>
+  </div>
+
+  <!-- AI 周总结结果 -->
+  <div v-if="aiEnabled && (aiText || aiBusy || aiError)" class="glass pad" style="margin-top: 12px">
+    <div class="head-row-ai">
+      <h3 class="sec-title" style="margin: 0">AI 周总结 <em>{{ rangeLabel }}</em></h3>
+      <button v-if="aiText" class="gmini" @click="copyAiText">复制</button>
+    </div>
+    <p v-if="aiBusy" class="empty" style="padding: 8px 0">AI 正在根据本周数据写总结…</p>
+    <p v-else-if="aiError" class="err" style="padding: 4px 0">{{ aiError }}</p>
+    <p v-else class="ai-text">{{ aiText }}</p>
+    <p class="foot-note" style="margin: 8px 0 0">学生姓名已脱敏后才发送给 AI；发送前请自行核对内容。</p>
   </div>
 
   <div v-if="report" class="grid">
@@ -274,6 +332,25 @@ async function exportImage() {
   background: var(--field);
   border: 1px solid var(--line);
   border-radius: 10px;
+}
+.ai-btn {
+  color: var(--primary);
+  border-color: var(--primary);
+  flex: none;
+  margin-left: 8px;
+}
+.head-row-ai {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.ai-text {
+  margin: 4px 0 0;
+  font-size: 14px;
+  line-height: 1.8;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 .gmini {
   padding: 7px 11px;

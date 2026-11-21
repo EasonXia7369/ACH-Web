@@ -102,6 +102,7 @@ const NAV = [
   { to: '/board', name: '大板', icon: 'board', key: 'board' },
   { to: '/attendance', name: '出勤', icon: 'attendance', key: 'attend' },
   { to: '/homework', name: '作业', icon: 'homework', key: 'hw' },
+  { to: '/exams', name: '考试', icon: 'exam', key: 'exam' },
   { to: '/messages', name: '消息', icon: 'chat', key: 'msg', badge: true },
   { to: '/manage', name: '管理', icon: 'manage', key: 'manage' },
 ]
