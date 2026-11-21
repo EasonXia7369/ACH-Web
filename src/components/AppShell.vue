@@ -686,6 +686,26 @@ onBeforeUnmount(() => chat.reset())
   .whoami {
     display: none;
   }
+  /* 班级名优先完整显示，班级切换下拉收窄 */
+  .topbar h1 {
+    flex: none;
+    max-width: 38vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cls-switch {
+    max-width: 118px;
+    padding-left: 6px;
+    padding-right: 22px;
+    font-size: 13px;
+  }
+  .top-right .topbtn {
+    padding: 8px 9px;
+  }
+  .top-right {
+    gap: 6px;
+  }
   .content {
     padding: 12px 16px calc(84px + env(safe-area-inset-bottom));
   }

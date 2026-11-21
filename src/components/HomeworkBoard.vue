@@ -301,7 +301,7 @@ watch([histFrom, histTo], () => {
 </script>
 
 <template>
-  <div class="subbar">
+  <div class="gseg subbar">
     <button :class="{ on: sub === 'miss' }" @click="sub = 'miss'">作业未交</button>
     <button :class="{ on: sub === 'task' }" @click="sub = 'task'">作业布置</button>
     <button :class="{ on: sub === 'history' }" @click="sub = 'history'">历史作业</button>
@@ -488,18 +488,9 @@ watch([histFrom, histTo], () => {
 </template>
 
 <style scoped>
+/* tab 样式统一走全局 gseg 分段控件（与考勤/消息/管理一致），这里只保留间距 */
 .subbar {
-  display: inline-flex;
-  background: var(--field);
-  padding: 3px;
-  border-radius: 10px;
-  gap: 2px;
   margin-bottom: 10px;
-}
-.subbar button {
-  padding: 6px 14px;
-  border-radius: 8px;
-  font-size: 12.5px;
 }
 /* ---------- 历史作业 ---------- */
 .hist-list {
@@ -639,6 +630,18 @@ watch([histFrom, histTo], () => {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
   gap: 8px;
+}
+/* 手机端：登记网格加密（更多列、更小按钮），一屏尽量看全 */
+@media (max-width: 860px) {
+  .sgrid {
+    grid-template-columns: repeat(auto-fill, minmax(74px, 1fr));
+    gap: 6px;
+  }
+  .stu {
+    padding: 8px 4px;
+    font-size: 12.5px;
+    border-radius: 8px;
+  }
 }
 .stu {
   padding: 10px 6px;
