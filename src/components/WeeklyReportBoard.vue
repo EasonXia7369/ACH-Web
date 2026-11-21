@@ -1,50 +1,259 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import dayjs from 'dayjs'
+import QRCode from 'qrcode'
+import { snapdom } from '@zumer/snapdom'
 import { get, post } from '@/api'
 import { useClassStore } from '@/stores/class'
 import { exportXlsx } from '@/utils/xlsx'
 import { saveFile } from '@/utils/platform'
-import { weekdayCn } from '@/utils/dates'
 import { useAi } from '@/composables/useAi'
+import { maskZh } from '@/utils/mask'
+import { weekdayCn } from '@/utils/dates'
 import Icon from '@/components/Icon.vue'
+import ReportSheet from '@/components/report/ReportSheet.vue'
+import type { ReportVM } from '@/components/report/ReportSheet.vue'
 
 const props = defineProps<{ classId: number }>()
 const store = useClassStore()
 const { aiEnabled, ensureStatus } = useAi()
 ensureStatus()
 
+/* ---------- 区间：本周 / 本月 / 自定义 ---------- */
+type Mode = 'week' | 'month' | 'custom'
+const mode = ref<Mode>('week')
 const monday = ref(dayjs().startOf('week').add(1, 'day').format('YYYY-MM-DD'))
-const report = ref<any>(null)
-const loading = ref(false)
+const monthAnchor = ref(dayjs().format('YYYY-MM'))
+const customFrom = ref(dayjs().subtract(6, 'day').format('YYYY-MM-DD'))
+const customTo = ref(dayjs().format('YYYY-MM-DD'))
 
-const from = computed(() => monday.value)
-const to = computed(() => dayjs(monday.value).add(6, 'day').format('YYYY-MM-DD'))
-const rangeLabel = computed(
-  () => `${from.value} ~ ${to.value}`,
-)
+const from = computed(() => {
+  if (mode.value === 'week') return monday.value
+  if (mode.value === 'month') return monthAnchor.value + '-01'
+  return customFrom.value
+})
+const to = computed(() => {
+  if (mode.value === 'week') return dayjs(monday.value).add(6, 'day').format('YYYY-MM-DD')
+  if (mode.value === 'month') return dayjs(monthAnchor.value + '-01').endOf('month').format('YYYY-MM-DD')
+  return customTo.value
+})
+const title = computed(() => (mode.value === 'month' ? '月报' : '周报'))
+const rangeLabel = computed(() => `${from.value} ~ ${to.value}`)
+// 环比区间：紧邻当前区间之前的等长窗口
+const prevRange = computed(() => {
+  if (mode.value === 'month') {
+    const p = dayjs(monthAnchor.value + '-01').subtract(1, 'month')
+    return { from: p.format('YYYY-MM-DD'), to: p.endOf('month').format('YYYY-MM-DD') }
+  }
+  const days = dayjs(to.value).diff(dayjs(from.value), 'day') + 1
+  return {
+    from: dayjs(from.value).subtract(days, 'day').format('YYYY-MM-DD'),
+    to: dayjs(from.value).subtract(1, 'day').format('YYYY-MM-DD'),
+  }
+})
 
-function shiftWeek(n: number) {
-  monday.value = dayjs(monday.value).add(n * 7, 'day').format('YYYY-MM-DD')
+function shift(n: number) {
+  if (mode.value === 'month') monthAnchor.value = dayjs(monthAnchor.value + '-01').add(n, 'month').format('YYYY-MM')
+  else monday.value = dayjs(monday.value).add(n * 7, 'day').format('YYYY-MM-DD')
 }
+
+/* ---------- 数据加载 ---------- */
+const report = ref<any>(null)
+const reportPrev = ref<any>(null)
+const loading = ref(false)
+const exams = ref<any[]>([])
+const trends = ref<any>(null)
+const examDetail = ref<any>(null)
+const qrDataUrl = ref('')
+
+const examsCache = new Map<number, any[]>()
+const trendsCache = new Map<number, any>()
+const detailCache = new Map<number, any>()
+const parentCache = new Map<number, string>()
 
 async function load() {
   loading.value = true
   try {
-    report.value = await get<any>(
-      `/api/classes/${props.classId}/report?from=${from.value}&to=${to.value}`,
-    )
+    const [cur, prev] = await Promise.all([
+      get<any>(`/api/classes/${props.classId}/report?from=${from.value}&to=${to.value}`),
+      get<any>(`/api/classes/${props.classId}/report?from=${prevRange.value.from}&to=${prevRange.value.to}`).catch(() => null),
+    ])
+    report.value = cur
+    reportPrev.value = prev
+
+    // 考试数据（按班级缓存）
+    if (!examsCache.has(props.classId)) {
+      examsCache.set(props.classId, (await get(`/api/classes/${props.classId}/exams`).catch(() => ({ exams: [] }))).exams ?? [])
+    }
+    exams.value = examsCache.get(props.classId)!
+    if (exams.value.length) {
+      if (!trendsCache.has(props.classId)) {
+        trendsCache.set(props.classId, await get(`/api/classes/${props.classId}/exams/trends`).catch(() => null))
+      }
+      trends.value = trendsCache.get(props.classId)
+      // 最近一次考试（报告区间结束日前）
+      const latest = [...exams.value].filter((e) => e.day <= to.value).sort((a, b) => (a.day < b.day ? 1 : -1))[0]
+      if (latest) {
+        if (!detailCache.has(latest.id)) detailCache.set(latest.id, await get(`/api/classes/${props.classId}/exams/${latest.id}`))
+        examDetail.value = detailCache.get(latest.id)
+      } else examDetail.value = null
+    } else {
+      trends.value = null
+      examDetail.value = null
+    }
+
+    // 家长视图二维码（按班级缓存）
+    if (!parentCache.has(props.classId)) {
+      try {
+        const detail = await get<any>(`/api/classes/${props.classId}`)
+        const k = detail.class?.parent_key ?? detail.parent_key ?? null
+        if (k) parentCache.set(props.classId, await QRCode.toDataURL(`https://ach.macrostar.top/parent/${k}`, { width: 256, margin: 1 }))
+        else parentCache.set(props.classId, '')
+      } catch {
+        parentCache.set(props.classId, '')
+      }
+    }
+    qrDataUrl.value = parentCache.get(props.classId)!
   } finally {
     loading.value = false
   }
 }
 
-watch([monday, props.classId], load, { immediate: true })
+watch([from, to, () => props.classId], load, { immediate: true })
 
-/* ---------- AI 周总结 ---------- */
+/* ---------- 脱敏开关 ---------- */
+const masked = ref(false)
+const nm = (name: string) => (masked.value ? maskZh(name) : name)
+
+/* ---------- 视图模型 ---------- */
+const shortDay = (d: string) => d.slice(5)
+
+const vm = computed<ReportVM>(() => {
+  const r = report.value
+  const cur = mode.value === 'month'
+  const exam = examDetail.value
+  const examMeta = exam?.exam
+
+  const dailyPoints = (r?.daily ?? []).map((d: any) => ({ label: shortDay(d.day), value: d.rate }))
+  const compare = buildCompare()
+
+  const subjects = examMeta
+    ? (examMeta.subjects as Array<{ subject: string; full: number }>).flatMap((s) => {
+        const st = exam.stats[s.subject]
+        return st && st.avg != null ? [{ label: s.subject, value: st.avg, max: s.full }] : []
+      })
+    : []
+  const totalFull = examMeta ? (examMeta.subjects as any[]).reduce((a, b) => a + b.full, 0) : 0
+  const totalStats = exam?.stats?.['总分']
+  const bands = totalStats
+    ? (totalStats.dist as number[]).map((v, i) => ({ label: `${i * 10}~${i * 10 + 10}%`, value: v }))
+    : []
+
+  // 历次总分均分（trends 每生序列反推班级均值）
+  const examTrend = (() => {
+    const ts = trends.value?.students
+    const series = trends.value?.series
+    if (!ts?.length || !series?.length) return null
+    const pts = series
+      .map((s: any) => {
+        const totals = ts
+          .map((stu: any) => stu.exams.find((e: any) => e.exam_id === s.exam_id)?.total)
+          .filter((t: any): t is number => t != null)
+        return { label: s.name.length > 6 ? s.name.slice(0, 6) : s.name, value: totals.length ? Math.round((totals.reduce((a: number, b: number) => a + b, 0) / totals.length) * 10) / 10 : 0 }
+      })
+      .filter((p: any) => p.value > 0)
+    return pts.length ? pts : null
+  })()
+
+  const monthExamRows = cur
+    ? (exams.value ?? [])
+        .filter((e) => e.day >= from.value && e.day <= to.value)
+        .sort((a, b) => (a.day < b.day ? -1 : 1))
+        .map((e) => {
+          const ts = trends.value?.students
+          const totals = ts
+            ?.map((stu: any) => stu.exams.find((x: any) => x.exam_id === e.id)?.total)
+            .filter((t: any): t is number => t != null) ?? []
+          return {
+            name: e.name,
+            day: e.day,
+            avgTotal: totals.length ? String(Math.round((totals.reduce((a: number, b: number) => a + b, 0) / totals.length) * 10) / 10) : '—',
+          }
+        })
+    : []
+
+  return {
+    title: title.value,
+    className: store.current?.name ?? '',
+    rangeText: `${rangeLabel.value}（${weekdayCn(from.value)} 起）`,
+    generatedAt: dayjs().format('YYYY-MM-DD HH:mm'),
+    aiText: aiText.value,
+    dailyPoints,
+    compare,
+    attendance: (r?.attendance ?? []).map((s: any) => ({ ...s, name: nm(s.name) })),
+    leaves: (r?.leaves ?? []).map((l: any) => ({ name: nm(l.name), range: `${l.from_day.slice(5)}~${l.to_day.slice(5)}`, reason: l.reason ?? '' })),
+    homework: (r?.homework ?? [])
+      .filter((h: any) => h.count)
+      .map((h: any) => ({ name: nm(h.name), count: h.count, detail: h.detail.join('；') })),
+    exam: examMeta
+      ? {
+          name: examMeta.name,
+          day: examMeta.day,
+          subjects,
+          bands,
+          avgTotal: totalStats?.avg != null ? `${totalStats.avg} / ${totalFull}` : null,
+          passRate: totalStats?.passRate != null ? `${totalStats.passRate}%` : null,
+          excellentRate: totalStats?.excellentRate != null ? `${totalStats.excellentRate}%` : null,
+        }
+      : null,
+    examTrend,
+    monthExamRows,
+    diagnosis: diagnosis.value,
+    qrDataUrl: qrDataUrl.value,
+  }
+})
+
+/** 环比：出勤率（均值差）、迟到/请假/作业未交（次数差）。改善 = 绿。 */
+function buildCompare() {
+  const r = report.value
+  const p = reportPrev.value
+  if (!r || !p) return null
+  const mean = (arr: any[]) => (arr.length ? arr.reduce((a: number, b: any) => a + b.rate, 0) / arr.length : null)
+  const curRate = mean(r.daily ?? [])
+  const prevRate = mean(p.daily ?? [])
+  const cnt = (arr: any[], k: string) => arr.reduce((a, b) => a + (b[k] ?? 0), 0)
+  const items: ReportVM['compare'] = []
+  const push = (label: string, c: number | null, pv: number | null, isRate: boolean) => {
+    let curS = '—'
+    let delta = '—'
+    let up = false
+    let good = false
+    if (c != null) curS = isRate ? `${Math.round(c * 100)}%` : String(Math.round(c * 10) / 10)
+    if (c != null && pv != null) {
+      const d = c - pv
+      if (Math.abs(isRate ? d * 100 : d) < (isRate ? 0.05 : 0.05)) delta = '持平'
+      else {
+        up = d > 0
+        delta = `${d > 0 ? '+' : ''}${isRate ? (Math.round(d * 1000) / 10) + 'pp' : Math.round(d * 10) / 10}`
+      }
+      good = isRate ? d >= 0 : d <= 0
+    }
+    items.push({ label, cur: curS, delta, up, good })
+  }
+  push('平均出勤率', curRate, prevRate, true)
+  push('迟到人次', cnt(r.attendance ?? [], 'late'), cnt(p.attendance ?? [], 'late'), false)
+  push('请假人次', cnt(r.attendance ?? [], 'leave'), cnt(p.attendance ?? [], 'leave'), false)
+  push('作业未交人次', cnt(r.homework ?? [], 'count'), cnt(p.homework ?? [], 'count'), false)
+  return items
+}
+
+/* ---------- AI 总结 / 考试诊断 ---------- */
 const aiText = ref('')
 const aiBusy = ref(false)
 const aiError = ref('')
+const diagnosis = ref<ReportVM['diagnosis']>(null)
+const diagBusy = ref(false)
+const diagError = ref('')
 
 async function genSummary() {
   if (aiBusy.value) return
@@ -52,15 +261,30 @@ async function genSummary() {
   aiError.value = ''
   aiText.value = ''
   try {
-    const res = await post<{ text: string }>(`/api/classes/${props.classId}/report/summary`, {
-      from: from.value,
-      to: to.value,
-    })
+    const res = await post<{ text: string }>(`/api/classes/${props.classId}/report/summary`, { from: from.value, to: to.value })
     aiText.value = res.text
   } catch (e: any) {
     aiError.value = e.message
   } finally {
     aiBusy.value = false
+  }
+}
+
+async function genDiagnosis() {
+  if (diagBusy.value || !examDetail.value) return
+  diagBusy.value = true
+  diagError.value = ''
+  diagnosis.value = null
+  try {
+    const res = await post<{ summary: ReportVM['diagnosis'] }>(
+      `/api/classes/${props.classId}/exams/${examDetail.value.exam.id}/summary`,
+      {},
+    )
+    diagnosis.value = res.summary
+  } catch (e: any) {
+    diagError.value = e.message
+  } finally {
+    diagBusy.value = false
   }
 }
 
@@ -75,353 +299,138 @@ async function copyAiText() {
 }
 const toastMsg = ref('')
 
+/* ---------- 导出 ---------- */
+const sheetEl = ref<HTMLElement | null>(null)
+const exporting = ref(false)
+
+async function exportImage() {
+  if (!sheetEl.value || exporting.value) return
+  exporting.value = true
+  try {
+    const result = await snapdom(sheetEl.value, { scale: 2 })
+    const blob = await result.toBlob({ format: 'png' })
+    await saveFile(`${title.value}_${store.current?.name}_${from.value}.png`, blob)
+  } finally {
+    exporting.value = false
+  }
+}
+
 async function exportXlsxReport() {
   const r = report.value
   if (!r) return
-  await exportXlsx(`周报_${store.current?.name}_${from.value}.xlsx`, [
+  const sheets: any[] = [
     {
       name: '考勤汇总',
       header: ['序号', '姓名', '请假', '迟到', '旷课', '违纪', '合计'],
-      rows: r.attendance.map((s: any, i: number) => [i + 1, s.name, s.leave, s.late, s.absent, s.violate, s.total]),
+      rows: r.attendance.map((s: any, i: number) => [i + 1, nm(s.name), s.leave, s.late, s.absent, s.violate, s.total]),
       widths: [6, 12, 8, 8, 8, 8, 8],
       freeze: 1,
     },
     {
       name: '请假明细',
       header: ['学生', '起', '止', '事由'],
-      rows: r.leaves.map((l: any) => [l.name, l.from_day, l.to_day, l.reason]),
+      rows: r.leaves.map((l: any) => [nm(l.name), l.from_day, l.to_day, l.reason]),
       widths: [12, 12, 12, 30],
     },
     {
       name: '作业未交',
       header: ['姓名', '未交次数', '明细'],
-      rows: r.homework.filter((h: any) => h.count).map((h: any) => [h.name, h.count, h.detail.join('；')]),
+      rows: r.homework.filter((h: any) => h.count).map((h: any) => [nm(h.name), h.count, h.detail.join('；')]),
       widths: [12, 10, 60],
     },
-  ])
-}
-
-/* 生成分享图片：1080 宽竖版，画布排版 */
-async function exportImage() {
-  const r = report.value
-  if (!r) return
-  const W = 1080
-  const PAD = 64
-  const scale = 2 // 2x 抗锯齿
-  const canvas = document.createElement('canvas')
-
-  // 先量高度
-  const rowH = 52
-  const headH = 240
-  const attH = r.attendance.length * rowH + 120
-  const hwH = r.homework.filter((h: any) => h.count).length * 44 + 90
-  const leaveH = r.leaves.length * 44 + 90
-  const footH = 120
-  const H = headH + attH + hwH + leaveH + footH
-  canvas.width = W * scale
-  canvas.height = H * scale
-  const ctx = canvas.getContext('2d')!
-  ctx.scale(scale, scale)
-
-  // 背景
-  ctx.fillStyle = '#f5f5f7'
-  ctx.fillRect(0, 0, W, H)
-  // 卡片
-  const cardX = 24
-  const cardW = W - 48
-  const cardR = 28
-  ctx.fillStyle = '#ffffff'
-  ctx.beginPath()
-  ctx.roundRect(cardX, 24, cardW, H - 48, cardR)
-  ctx.fill()
-
-  let y = 96
-  ctx.fillStyle = '#1d1d1f'
-  ctx.font = '600 52px MiSans, sans-serif'
-  ctx.textBaseline = 'top'
-  ctx.fillText(`${store.current?.name ?? '班级'} 周报`, cardX + 48, y)
-  y += 74
-  ctx.fillStyle = '#6e6e73'
-  ctx.font = '400 26px MiSans, sans-serif'
-  ctx.fillText(`${rangeLabel.value}（${weekdayCn(from.value)} 起）`, cardX + 48, y)
-  y += 90
-
-  const section = (title: string, yy: number) => {
-    ctx.fillStyle = '#007aff'
-    ctx.font = '600 30px MiSans, sans-serif'
-    ctx.fillText(title, cardX + 48, yy)
-    return yy + 56
-  }
-  const line = (x1: number, yy: number) => {
-    ctx.strokeStyle = 'rgba(0,0,0,0.08)'
-    ctx.beginPath()
-    ctx.moveTo(x1, yy)
-    ctx.lineTo(cardX + cardW - 48, yy)
-    ctx.stroke()
-  }
-
-  // 考勤表
-  y = section('出勤情况', y)
-  ctx.font = '500 26px MiSans, sans-serif'
-  const cols = [cardX + 60, cardX + 200, cardX + 380, cardX + 560, cardX + 740, cardX + 880]
-  const headers = ['姓名', '请假', '迟到', '旷课', '违纪', '合计']
-  ctx.fillStyle = '#6e6e73'
-  headers.forEach((h, i) => ctx.fillText(h, cols[i], y))
-  y += 48
-  line(cardX + 48, y - 12)
-  for (const s of r.attendance) {
-    ctx.fillStyle = '#1d1d1f'
-    ctx.fillText(s.name, cols[0], y)
-    const vals = [s.leave, s.late, s.absent, s.violate, s.total]
-    vals.forEach((v, i) => {
-      ctx.fillStyle = v > 0 ? '#ff3b30' : '#a1a1a6'
-      ctx.fillText(String(v), cols[i + 1], y)
+  ]
+  const e = examDetail.value
+  if (e?.stats) {
+    const subs = e.exam.subjects as any[]
+    sheets.push({
+      name: '考试统计',
+      header: ['科目', '满分', '平均', '最高', '最低', '及格率%', '优秀率%', '缺考'],
+      rows: [...subs, { subject: '总分', full: subs.reduce((a, b) => a + b.full, 0) }].map((s) => {
+        const st = e.stats[s.subject]
+        return [s.subject, s.full, st?.avg ?? '', st?.max ?? '', st?.min ?? '', st?.passRate ?? '', st?.excellentRate ?? '', st?.absent ?? 0]
+      }),
+      widths: [10, 8, 8, 8, 8, 9, 9, 8],
     })
-    y += rowH
+    sheets.push({
+      name: '考试成绩',
+      header: ['姓名', '总分', '排名', ...subs.map((s) => s.subject)],
+      rows: e.students
+        .filter((s: any) => s.active)
+        .map((s: any) => [nm(s.name), s.total ?? '缺考', s.rank ?? '', ...subs.map((sub) => s.scores[sub.subject] ?? '')]),
+      widths: [12, 8, 6, ...subs.map(() => 8)],
+    })
   }
-  y += 40
-
-  // 作业未交
-  const hw = r.homework.filter((h: any) => h.count)
-  if (hw.length) {
-    y = section('作业未交', y)
-    ctx.font = '500 26px MiSans, sans-serif'
-    for (const h of hw) {
-      ctx.fillStyle = '#1d1d1f'
-      ctx.fillText(`${h.name}（${h.count} 次）`, cardX + 60, y)
-      y += 44
-    }
-    y += 40
-  }
-
-  // 请假
-  if (r.leaves.length) {
-    y = section('请假', y)
-    ctx.font = '400 26px MiSans, sans-serif'
-    for (const l of r.leaves) {
-      ctx.fillStyle = '#1d1d1f'
-      ctx.fillText(`${l.name}：${l.from_day} ~ ${l.to_day}${l.reason ? '（' + l.reason + '）' : ''}`, cardX + 60, y)
-      y += 44
-    }
-    y += 40
-  }
-
-  // 页脚
-  ctx.fillStyle = '#a1a1a6'
-  ctx.font = '400 22px MiSans, sans-serif'
-  ctx.fillText('班级中心 · Ark Class Hub', cardX + 48, H - 96)
-
-  const blob: Blob = await new Promise((resolve) =>
-    canvas.toBlob((b) => resolve(b!), 'image/png'),
-  )
-  await saveFile(`周报_${store.current?.name}_${from.value}.png`, blob)
+  await exportXlsx(`${title.value}_${store.current?.name}_${from.value}.xlsx`, sheets)
 }
 </script>
 
 <template>
-  <div class="toolbar card">
-    <button class="nav" @click="shiftWeek(-1)">‹</button>
-    <span class="range-label">{{ rangeLabel }}（{{ weekdayCn(from) }} ~ {{ weekdayCn(to) }}）</span>
-    <button class="nav" @click="shiftWeek(1)">›</button>
-    <button class="gmini" @click="monday = dayjs().startOf('week').add(1, 'day').format('YYYY-MM-DD')">本周</button>
-    <button
-      v-if="aiEnabled"
-      class="gmini ai-btn"
-      :disabled="aiBusy"
-      :title="'AI 生成本周总结，可直接复制发家长群'"
-      @click="genSummary"
-    >
-      <Icon name="quote" :size="13" /> {{ aiBusy ? 'AI 写作中…' : 'AI 总结' }}
-    </button>
-  </div>
+  <div class="wrp">
+    <div class="toolbar card">
+      <template v-if="mode !== 'custom'">
+        <button class="nav" @click="shift(-1)">‹</button>
+        <span class="range-label">{{ rangeLabel }}</span>
+        <button class="nav" @click="shift(1)">›</button>
+      </template>
+      <template v-else>
+        <input v-model="customFrom" type="date" class="ginput" />
+        <span class="range-label">~</span>
+        <input v-model="customTo" type="date" class="ginput" />
+      </template>
 
-  <!-- AI 周总结结果 -->
-  <div v-if="aiEnabled && (aiText || aiBusy || aiError)" class="glass pad" style="margin-top: 12px">
-    <div class="head-row-ai">
-      <h3 class="sec-title" style="margin: 0">AI 周总结 <em>{{ rangeLabel }}</em></h3>
-      <button v-if="aiText" class="gmini" @click="copyAiText">复制</button>
-    </div>
-    <p v-if="aiBusy" class="empty" style="padding: 8px 0">AI 正在根据本周数据写总结…</p>
-    <p v-else-if="aiError" class="err" style="padding: 4px 0">{{ aiError }}</p>
-    <p v-else class="ai-text">{{ aiText }}</p>
-    <p class="foot-note" style="margin: 8px 0 0">学生姓名已脱敏后才发送给 AI；发送前请自行核对内容。</p>
-  </div>
-
-  <div v-if="report" class="grid">
-    <div class="glass pad">
-      <h3 class="sec-title">出勤情况 <em>{{ report.total_students }} 人</em></h3>
-      <div class="table-scroll">
-      <table class="gtable stats">
-        <thead>
-          <tr><th>#</th><th style="text-align: left">姓名</th><th>请假</th><th>迟到</th><th>旷课</th><th>违纪</th><th>合计</th></tr>
-        </thead>
-        <tbody>
-          <tr v-for="(s, i) in report.attendance" :key="s.name">
-            <td class="idx">{{ i + 1 }}</td>
-            <td class="name">{{ s.name }}</td>
-            <td :class="{ nz: s.leave }">{{ s.leave || '' }}</td>
-            <td :class="{ nz: s.late }">{{ s.late || '' }}</td>
-            <td :class="{ nz: s.absent }">{{ s.absent || '' }}</td>
-            <td :class="{ nz: s.violate }">{{ s.violate || '' }}</td>
-            <td class="total">{{ s.total || '' }}</td>
-          </tr>
-        </tbody>
-      </table>
+      <div class="seg">
+        <button class="seg-btn" :class="{ on: mode === 'week' }" @click="mode = 'week'">周</button>
+        <button class="seg-btn" :class="{ on: mode === 'month' }" @click="mode = 'month'">月</button>
+        <button class="seg-btn" :class="{ on: mode === 'custom' }" @click="mode = 'custom'">自定义</button>
       </div>
+
+      <label class="mask-toggle gmini" :class="{ on: masked }" title="导出时姓名脱敏（张三→张S）">
+        <input v-model="masked" type="checkbox" /> 姓名脱敏
+      </label>
+
+      <span class="spacer" />
+
+      <button v-if="aiEnabled" class="gmini ai-btn" :disabled="aiBusy || loading" @click="genSummary">
+        <Icon name="sparkles" :size="14" /> {{ aiBusy ? '生成中…' : 'AI 总结' }}
+      </button>
+      <button v-if="aiEnabled && examDetail" class="gmini ai-btn" :disabled="diagBusy || loading" @click="genDiagnosis">
+        <Icon name="sparkles" :size="14" /> {{ diagBusy ? '分析中…' : 'AI 考试诊断' }}
+      </button>
+      <button class="gbtn" :disabled="!report || loading" @click="exportXlsxReport"><Icon name="download" :size="15" /> Excel</button>
+      <button class="gbtn primary" :disabled="!report || loading || exporting" @click="exportImage">
+        <Icon name="image" :size="15" /> {{ exporting ? '生成中…' : '生成图片' }}
+      </button>
     </div>
 
-    <div class="glass pad">
-      <h3 class="sec-title">请假 <em>{{ report.leaves.length }}</em></h3>
-      <div v-if="report.leaves.length" class="lines">
-        <div v-for="(l, i) in report.leaves" :key="i" class="line-item">
-          <b>{{ l.name }}</b>：{{ l.from_day }} ~ {{ l.to_day }}<span v-if="l.reason">（{{ l.reason }}）</span>
-        </div>
-      </div>
-      <p v-else class="empty">本周没有请假</p>
-
-      <h3 class="sec-title" style="margin-top: 18px">作业未交 <em>{{ report.homework.filter((h: any) => h.count).length }} 人</em></h3>
-      <div v-if="report.homework.filter((h: any) => h.count).length" class="lines">
-        <div v-for="h in report.homework.filter((x: any) => x.count)" :key="h.name" class="line-item">
-          <b>{{ h.name }}</b>（{{ h.count }} 次）<span class="foot-note">{{ h.detail[0] }}{{ h.detail.length > 1 ? ' 等' : '' }}</span>
-        </div>
-      </div>
-      <p v-else class="empty">本周无未交记录</p>
+    <p v-if="aiError || diagError" class="ai-error">{{ aiError || diagError }}</p>
+    <div v-if="aiText" class="ai-copy card">
+      <p class="ai-text">{{ aiText }}</p>
+      <button class="gmini" @click="copyAiText">{{ toastMsg || '复制' }}</button>
     </div>
-  </div>
 
-  <div class="acts">
-    <button class="gbtn" :disabled="!report" @click="exportXlsxReport"><Icon name="download" :size="15" /> 导出 Excel</button>
-    <button class="gbtn primary" :disabled="!report" @click="exportImage"><Icon name="image" :size="15" /> 生成图片（发家长群）</button>
+    <div v-if="loading && !report" class="card pad center">加载中…</div>
+    <div v-else-if="report" ref="sheetEl" class="sheet-wrap">
+      <ReportSheet :vm="vm" />
+    </div>
   </div>
 </template>
 
 <style scoped>
-.card,
-.glass {
-  background: var(--panel);
-  backdrop-filter: var(--glass-blur);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-}
-.toolbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
-}
-/* 手机端：区间标签独占一行，导航与按钮放下一行 */
-@media (max-width: 860px) {
-  .toolbar .range-label {
-    flex: 1 1 100%;
-    order: -1;
-  }
-  .toolbar .nav {
-    flex: 1;
-  }
-  .toolbar .gmini {
-    flex: 1;
-    text-align: center;
-  }
-}
-.nav {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  border: 1px solid var(--line);
-  background: var(--field);
-  font-size: 17px;
-  color: var(--muted);
-  cursor: pointer;
-  flex: none;
-}
-.range-label {
-  flex: 1;
-  text-align: center;
-  font-weight: 700;
-  font-size: 14.5px;
-  padding: 8px 4px;
-  background: var(--field);
-  border: 1px solid var(--line);
-  border-radius: 10px;
-}
-.ai-btn {
-  color: var(--primary);
-  border-color: var(--primary);
-  flex: none;
-  margin-left: 8px;
-}
-.head-row-ai {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-.ai-text {
-  margin: 4px 0 0;
-  font-size: 14px;
-  line-height: 1.8;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.gmini {
-  padding: 7px 11px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--field);
-  font-size: 12.5px;
-  color: var(--muted);
-  cursor: pointer;
-}
-.grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-@media (max-width: 860px) {
-  .grid {
-    grid-template-columns: 1fr;
-  }
-}
-.pad {
-  padding: 16px 18px;
-}
-.stats th {
-  text-align: center;
-}
-.stats td {
-  text-align: center;
-}
-.stats td.name {
-  text-align: left;
-  font-weight: 600;
-}
-.idx {
-  color: var(--faint);
-}
-.nz {
-  font-weight: 700;
-  color: var(--absent);
-}
-.total {
-  font-weight: 700;
-}
-.lines {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.line-item {
-  font-size: 13px;
-  padding: 6px 8px;
-  background: var(--field);
-  border-radius: 8px;
-}
-.acts {
-  display: flex;
-  gap: 8px;
-  margin-top: 14px;
-}
+.wrp { display: flex; flex-direction: column; gap: 16px; }
+.toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.nav { width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--line, rgba(0,0,0,0.1)); background: transparent; cursor: pointer; font-size: 18px; }
+.range-label { font-weight: 600; font-variant-numeric: tabular-nums; }
+.seg { display: flex; border: 1px solid var(--line, rgba(0,0,0,0.1)); border-radius: 10px; overflow: hidden; }
+.seg-btn { padding: 6px 14px; background: transparent; border: none; cursor: pointer; font-size: 14px; }
+.seg-btn.on { background: var(--accent, #007aff); color: #fff; }
+.mask-toggle { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; user-select: none; }
+.mask-toggle.on { background: var(--accent, #007aff); color: #fff; }
+.spacer { flex: 1; }
+.ai-error { color: #ff3b30; font-size: 14px; margin: 0; }
+.ai-copy { display: flex; align-items: flex-start; gap: 12px; padding: 14px 18px; }
+.ai-copy .ai-text { flex: 1; margin: 0; white-space: pre-wrap; line-height: 1.7; }
+.pad { padding: 32px; }
+.center { text-align: center; color: var(--muted, #6e6e73); }
+.sheet-wrap { display: flex; justify-content: center; }
+.sheet-wrap > :deep(.rpt) { border-radius: 24px; box-shadow: var(--shadow, 0 8px 40px rgba(0,0,0,0.08)); }
 </style>

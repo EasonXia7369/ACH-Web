@@ -35,6 +35,7 @@ const PATHS: Record<string, string> = {
   bellOff: 'M6 10a6 6 0 0 1 12 0c0 5 1.8 6.5 2.2 7H3.8C4.2 16.5 6 15 6 10z M10.3 20a2 2 0 0 0 3.4 0 M4 4l16 16',
   info: 'M12 3a9 9 0 1 0 9 9 9 9 0 0 0-9-9z M12 8h.01 M12 11.5v5.5',
   exam: 'M4 20V9 M9.5 20V4 M15 20v-7 M20.5 20V6 M3 20h18.5',
+  sparkles: 'M11 5l1.7 4L17 10.7l-4.3 1.7L11 16.5l-1.7-4.1L5 10.7l4.3-1.7z M18.5 15.5l.9 2.1 2.1.9-2.1.9-.9 2.1-.9-2.1-2.1-.9 2.1-.9z',
 }
 
 const svgPath = PATHS[props.name] ?? PATHS.check

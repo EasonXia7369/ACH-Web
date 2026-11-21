@@ -106,6 +106,7 @@ function collectReport(from, to) {
     days.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`)
   }
   const agg = new Map(students.map((s) => [s.id, { leave: 0, late: 0, absent: 0, violate: 0, total: 0 }]))
+  const dayAgg = new Map()
   for (const [key, r] of attendanceMap) {
     const day = key.split('|')[2]
     if (!days.includes(day) || r.status === 'present') continue
@@ -114,6 +115,10 @@ function collectReport(from, to) {
     if (['leave', 'late', 'absent', 'violate'].includes(r.status)) {
       a[r.status]++
       a.total++
+      const d = dayAgg.get(day) ?? { leave: 0, late: 0, absent: 0, violate: 0, flagged: new Set() }
+      d[r.status]++
+      d.flagged.add(r.student_id)
+      dayAgg.set(day, d)
     }
   }
   return {
@@ -131,8 +136,84 @@ function collectReport(from, to) {
       .flatMap((r) =>
         r.missing.map((sid) => ({ name: students.find((s) => s.id === sid)?.name ?? '', count: 1, detail: [`${r.day} ${r.subject}`] })),
       ),
+    daily: [...dayAgg.entries()]
+      .sort((a, b) => (a[0] < b[0] ? -1 : 1))
+      .map(([day, d]) => ({
+        day,
+        leave: d.leave,
+        late: d.late,
+        absent: d.absent,
+        violate: d.violate,
+        rate: students.length ? Math.round((1 - d.flagged.size / students.length) * 1000) / 1000 : 1,
+      })),
   }
 }
+
+/* ---------- 考试（成绩块预览） ---------- */
+
+const EXAM_SUBS = [
+  { subject: '语文', full: 100 },
+  { subject: '数学', full: 120 },
+  { subject: '英语', full: 100 },
+]
+const shiftDay = (n) => {
+  const d = new Date(todayStr() + 'T00:00:00')
+  d.setDate(d.getDate() + n)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+const mockExams = [
+  { id: 1, name: '第一次月考', day: shiftDay(-24), subjects: EXAM_SUBS },
+  { id: 2, name: '期中考试', day: shiftDay(-3), subjects: EXAM_SUBS },
+]
+
+// 确定性伪分数：seq/科目决定，两次考试间有涨跌
+function examScore(sid, ei, subIdx, full) {
+  const base = 0.55 + ((sid * 37 + subIdx * 11) % 45) / 100
+  const drift = ei === 1 ? -0.06 + (sid % 3) * 0.03 : (sid % 5) * 0.025 - 0.04
+  return Math.round(Math.min(full, Math.max(full * 0.3, full * Math.min(0.98, base + drift))) * 10) / 10
+}
+
+function statOfMock(vals, full) {
+  const valid = vals.filter((v) => v != null)
+  const n = valid.length
+  const dist = new Array(10).fill(0)
+  for (const v of valid) dist[Math.min(9, Math.max(0, Math.floor((v / full) * 10)))]++
+  return {
+    count: n,
+    absent: vals.length - n,
+    avg: n ? Math.round((valid.reduce((a, b) => a + b, 0) / n) * 10) / 10 : null,
+    max: n ? Math.max(...valid) : null,
+    min: n ? Math.min(...valid) : null,
+    passRate: n ? Math.round((valid.filter((v) => v >= full * 0.6).length / n) * 1000) / 10 : null,
+    excellentRate: n ? Math.round((valid.filter((v) => v >= full * 0.85).length / n) * 1000) / 10 : null,
+    dist,
+  }
+}
+
+function buildExamDetail(exam) {
+  const rows = students.map((s) => {
+    const scores = {}
+    let total = 0
+    let counted = 0
+    exam.subjects.forEach((sub, i) => {
+      const has = !(s.id === 8 && i === 2) // 林晓彤英语缺考
+      scores[sub.subject] = has ? examScore(s.id, exam.id - 1, i, sub.full) : null
+      if (has) {
+        total += scores[sub.subject]
+        counted++
+      }
+    })
+    return { id: s.id, name: s.name, seq: s.seq, active: true, scores, total: counted ? Math.round(total * 10) / 10 : null, absent: [], rank: null }
+  })
+  const ranked = [...rows.filter((r) => r.total !== null)].sort((a, b) => b.total - a.total)
+  ranked.forEach((r, i) => (r.rank = i > 0 && r.total === ranked[i - 1].total ? ranked[i - 1].rank : i + 1))
+  const stats = {}
+  for (const sub of exam.subjects) stats[sub.subject] = statOfMock(rows.map((r) => r.scores[sub.subject]), sub.full)
+  stats['总分'] = statOfMock(rows.map((r) => r.total), exam.subjects.reduce((a, b) => a + b.full, 0))
+  return { exam: { id: exam.id, name: exam.name, day: exam.day, subjects: exam.subjects }, students: rows, stats }
+}
+
+const mockDetailCache = new Map(mockExams.map((e) => [e.id, buildExamDetail(e)]))
 
 /* ---------- 路由表 ---------- */
 
@@ -207,6 +288,40 @@ const routes = [
     const day = todayStr()
     return { day, weekday: weekdayOf(day), periods: timetable.filter((t) => t.weekday === weekdayOf(day)) }
   }],
+
+  // 考试（成绩块预览）
+  ['GET', /^\/api\/classes\/(\d+)\/exams$/, () => ({ exams: mockExams.map((e) => ({ ...e, created_at: e.day })) })],
+  ['GET', /^\/api\/classes\/(\d+)\/exams\/trends$/, () => ({
+    series: mockExams.map((e) => {
+      const d = mockDetailCache.get(e.id)
+      const subjectAvgs = {}
+      for (const sub of e.subjects) subjectAvgs[sub.subject] = d.stats[sub.subject].avg
+      return { exam_id: e.id, name: e.name, day: e.day, subjectAvgs }
+    }),
+    students: students.map((s) => ({
+      id: s.id,
+      name: s.name,
+      seq: s.seq,
+      exams: mockExams.map((e) => {
+        const row = mockDetailCache.get(e.id).students.find((r) => r.id === s.id)
+        return { exam_id: e.id, name: e.name, day: e.day, scores: row.scores, total: row.total }
+      }),
+    })),
+  })],
+  ['GET', /^\/api\/classes\/(\d+)\/exams\/(\d+)$/, (m) => mockDetailCache.get(Number(m[2])) ?? { error: '不存在' }],
+  ['POST', /^\/api\/classes\/(\d+)\/exams\/(\d+)\/summary$/, () => new Promise((resolve) =>
+    setTimeout(() => resolve({
+      summary: {
+        overall: '本次期中考试班级整体表现稳中有升，总分均分较上次月考提高约 4 分。语文得分率最高，英语相对薄弱且有一名学生缺考。',
+        strengths: ['语文得分率全班最高，阅读部分表现突出', '数学高分段人数增加，满分段出现 2 人'],
+        weaknesses: ['英语得分率明显低于其他科目，听力部分失分集中', '数学后 20% 学生与班级均分差距拉大'],
+        attention: [
+          { name: '林X', reason: '英语缺考，需了解情况' },
+          { name: '刘X', reason: '总分较上次下降明显' },
+        ],
+      },
+    }), 600)),
+  ],
 
   // 周报 + AI 总结（延迟 600ms 模拟 AI 生成）
   ['GET', /^\/api\/classes\/(\d+)\/report$/, (m, q) => collectReport(q.get('from') ?? mondayOf(todayStr()), q.get('to') ?? todayStr())],

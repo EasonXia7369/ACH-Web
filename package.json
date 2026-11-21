@@ -12,6 +12,7 @@
   "dependencies": {
     "@fastify/static": "^10.1.11",
     "@vueuse/core": "^15.0.0",
+    "@zumer/snapdom": "^3.8.2",
     "dayjs": "^1.11.23",
     "exceljs": "^4.4.0",
     "js-yaml": "^5.5.0",
