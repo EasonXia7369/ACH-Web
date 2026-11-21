@@ -1,14 +1,31 @@
 import { fileURLToPath, URL } from 'node:url'
-import { defineConfig } from 'vite'
+import { defineConfig, type Plugin } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
+import { mockApiHandler } from './mock/server.js'
 
-export default defineConfig({
+/** 纯前端预览（`npm run dev:mock`，即 --mode mock 时启用）：接管 /api/*，无需启动后端。 */
+function mockServer(): Plugin {
+  return {
+    name: 'mock-api-server',
+    apply: 'serve',
+    configureServer(server) {
+      if (server.config.mode !== 'mock') return
+      server.middlewares.use(mockApiHandler())
+      console.log('\n  [mock] 纯前端预览模式：/api/* 由 mock/server.js 接管，无需启动后端')
+      console.log('  [mock] 登录账号随意（用户名/密码任意），角色：演示老师\n')
+    },
+    // 同时禁用 /api 代理（mock 模式下由中间件接管，代理排在其后不会生效，但显式去掉更清晰）
+  }
+}
+
+export default defineConfig(({ mode }) => ({
   // 构建时间戳：关于页展示「构建于」（每次构建刷新）
   define: {
     __BUILD_AT__: JSON.stringify(new Date().toISOString()),
   },
   plugins: [
+    mockServer(),
     vue(),
     VitePWA({
       registerType: 'autoUpdate',
@@ -68,7 +85,8 @@ export default defineConfig({
   },
   server: {
     port: 5173,
-    proxy: {
+    // mock 模式（纯前端预览）下 /api 由 mockServer 中间件接管，不走后端代理
+    proxy: mode === 'mock' ? undefined : {
       '/api': {
         target: 'http://localhost:8787',
         changeOrigin: true,
@@ -76,4 +94,4 @@ export default defineConfig({
       },
     },
   },
-})
+}))
