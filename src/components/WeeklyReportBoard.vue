@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import dayjs from 'dayjs'
 import QRCode from 'qrcode'
 import { snapdom } from '@zumer/snapdom'
 import { get, post } from '@/api'
 import { useClassStore } from '@/stores/class'
 import { exportXlsx } from '@/utils/xlsx'
-import { saveFile } from '@/utils/platform'
+import { saveFile, saveOrShare } from '@/utils/platform'
 import { useAi } from '@/composables/useAi'
 import { maskZh } from '@/utils/mask'
 import { weekdayCn } from '@/utils/dates'
@@ -303,12 +303,49 @@ const toastMsg = ref('')
 const sheetEl = ref<HTMLElement | null>(null)
 const exporting = ref(false)
 
+/* ---------- 预览自适应：整张缩到屏宽看全貌（导出不受影响，transform 只在祖先层） ---------- */
+const wrapEl = ref<HTMLElement | null>(null)
+const scale = ref(1)
+const scaledH = ref(0)
+let anchorH = 0
+let ro: ResizeObserver | null = null
+
+function updateSheetScale() {
+  const w = wrapEl.value?.clientWidth ?? 0
+  scale.value = w ? Math.min(1, w / 1080) : 1
+  scaledH.value = anchorH ? Math.ceil(anchorH * scale.value) : 0
+}
+
+// 报告本体高度变化（区间切换/数据加载）时重算
+watch(sheetEl, (el) => {
+  ro?.disconnect()
+  ro = null
+  if (!el) return
+  ro = new ResizeObserver(() => {
+    anchorH = el.offsetHeight // 布局高度，不受祖先 transform 影响
+    updateSheetScale()
+  })
+  ro.observe(el)
+  anchorH = el.offsetHeight
+  updateSheetScale()
+})
+
+onMounted(() => {
+  window.addEventListener('resize', updateSheetScale, { passive: true })
+})
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', updateSheetScale)
+  ro?.disconnect()
+})
+
+
 async function exportImage() {
   if (!sheetEl.value || exporting.value) return
   exporting.value = true
   try {
-    // 统一导出：等 webfont 就绪；固定输出 2160px 宽（1080 布局 × 2），
-    // 显式 dpr=1 抹掉 devicePixelRatio 差异（手机 3x/桌面 1x 导出图不再不同）
+    // 统一导出：截取报告本体（sheet-anchor，不受外层缩放 transform 影响）；
+    // 等 webfont 就绪；固定输出 2160px 宽（1080 布局 × 2），显式 dpr=1
+    // 抹掉 devicePixelRatio 差异（手机 3x/桌面 1x 导出图不再不同）
     await document.fonts.ready
     const result = await snapdom(sheetEl.value, {
       width: 2160,
@@ -316,7 +353,7 @@ async function exportImage() {
       backgroundColor: '#f5f5f7',
     })
     const blob = await result.toBlob({ format: 'png' })
-    await saveFile(`${title.value}_${store.current?.name}_${from.value}.png`, blob)
+    await saveOrShare(`${title.value}_${store.current?.name}_${from.value}.png`, blob)
   } finally {
     exporting.value = false
   }
@@ -416,8 +453,16 @@ async function exportXlsxReport() {
     </div>
 
     <div v-if="loading && !report" class="card pad center">加载中…</div>
-    <div v-else-if="report" ref="sheetEl" class="sheet-wrap">
-      <ReportSheet :vm="vm" />
+    <div v-else-if="report" ref="wrapEl" class="sheet-wrap">
+      <!-- 外层只做缩放（transform 不进入 snapdom 克隆），内层恒定 1080 布局宽供导出 -->
+      <div
+        class="sheet-scale"
+        :style="scale < 1 && scaledH ? { transform: `scale(${scale})`, height: scaledH + 'px' } : undefined"
+      >
+        <div ref="sheetEl" class="sheet-anchor">
+          <ReportSheet :vm="vm" />
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -438,7 +483,9 @@ async function exportXlsxReport() {
 .ai-copy .ai-text { flex: 1; margin: 0; white-space: pre-wrap; line-height: 1.7; }
 .pad { padding: 32px; }
 .center { text-align: center; color: var(--muted, #6e6e73); }
-.sheet-wrap { display: flex; justify-content: center; overflow-x: auto; }
-/* 报告固定 1080px 布局宽：禁止 flex 收缩，任何设备上预览与导出布局一致（窄屏横向滚动） */
-.sheet-wrap > :deep(.rpt) { flex: none; border-radius: 24px; box-shadow: var(--shadow, 0 8px 40px rgba(0,0,0,0.08)); }
+.sheet-wrap { display: flex; justify-content: center; }
+.sheet-scale { transform-origin: top center; }
+/* 报告本体恒定 1080px 布局宽：任何设备布局一致；窄屏由外层整体缩小适配屏宽 */
+.sheet-anchor { width: 1080px; margin: 0 auto; }
+.sheet-anchor > :deep(.rpt) { border-radius: 24px; box-shadow: var(--shadow, 0 8px 40px rgba(0,0,0,0.08)); }
 </style>

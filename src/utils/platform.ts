@@ -58,3 +58,22 @@ export async function saveFile(filename: string, blob: Blob): Promise<void> {
     a.remove()
   }, 3000)
 }
+
+/**
+ * 移动端友好的保存：优先调起系统分享面板（微信/QQ/保存到相册等），
+ * 不支持或用户取消时回落到浏览器下载。
+ */
+export async function saveOrShare(filename: string, blob: Blob): Promise<void> {
+  if (desktopBridge) return saveFile(filename, blob)
+  try {
+    const file = new File([blob], filename, { type: blob.type })
+    if (typeof navigator.canShare === 'function' && navigator.canShare({ files: [file] })) {
+      await navigator.share({ files: [file], title: filename })
+      return
+    }
+  } catch (e: any) {
+    // 用户在分享面板点取消（AbortError）→ 不再重复下载
+    if (e?.name === 'AbortError') return
+  }
+  await saveFile(filename, blob)
+}
