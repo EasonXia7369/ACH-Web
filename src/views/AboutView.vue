@@ -100,6 +100,14 @@ onMounted(async () => {
           <a href="https://github.com/EasonXia7369/ArkClassHub-Desktop" target="_blank" rel="noopener">ArkClassHub-Desktop</a>
         </div>
       </div>
+
+      <div class="sec">
+        <h3>版权信息</h3>
+        <p class="line">© 2024-2026 MacroSTAR Studio All rights reserved.</p>
+        <div class="links">
+          <a href="https://macrostar.top/" target="_blank" rel="noopener">宏维星智智慧科技官网</a>
+        </div>
+      </div>
     </div>
   </div>
 </template>
