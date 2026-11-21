@@ -307,7 +307,14 @@ async function exportImage() {
   if (!sheetEl.value || exporting.value) return
   exporting.value = true
   try {
-    const result = await snapdom(sheetEl.value, { scale: 2 })
+    // 统一导出：等 webfont 就绪；固定输出 2160px 宽（1080 布局 × 2），
+    // 显式 dpr=1 抹掉 devicePixelRatio 差异（手机 3x/桌面 1x 导出图不再不同）
+    await document.fonts.ready
+    const result = await snapdom(sheetEl.value, {
+      width: 2160,
+      dpr: 1,
+      backgroundColor: '#f5f5f7',
+    })
     const blob = await result.toBlob({ format: 'png' })
     await saveFile(`${title.value}_${store.current?.name}_${from.value}.png`, blob)
   } finally {
@@ -431,6 +438,7 @@ async function exportXlsxReport() {
 .ai-copy .ai-text { flex: 1; margin: 0; white-space: pre-wrap; line-height: 1.7; }
 .pad { padding: 32px; }
 .center { text-align: center; color: var(--muted, #6e6e73); }
-.sheet-wrap { display: flex; justify-content: center; }
-.sheet-wrap > :deep(.rpt) { border-radius: 24px; box-shadow: var(--shadow, 0 8px 40px rgba(0,0,0,0.08)); }
+.sheet-wrap { display: flex; justify-content: center; overflow-x: auto; }
+/* 报告固定 1080px 布局宽：禁止 flex 收缩，任何设备上预览与导出布局一致（窄屏横向滚动） */
+.sheet-wrap > :deep(.rpt) { flex: none; border-radius: 24px; box-shadow: var(--shadow, 0 8px 40px rgba(0,0,0,0.08)); }
 </style>
