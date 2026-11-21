@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { get, post, put, del } from '@/api'
 import { saveFile } from '@/utils/platform'
@@ -149,9 +149,21 @@ const tabs = computed<Array<{ key: Tab; label: string; icon: string }>>(() => {
   return base
 })
 const tab = ref<Tab>((route.query.tab as Tab) ?? 'students')
-// 可用 tab 集变化（如校管理员无班级时）→ 当前 tab 不在列则回落到第一个
+
+// 手机端 tabs 横向滑动：切板块后把激活项滚进可视区
+function scrollTabIntoView() {
+  nextTick(() => {
+    document
+      .querySelector('.manage-tabs button.on')
+      ?.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' })
+  })
+}
+watch(tab, scrollTabIntoView)
+onMounted(scrollTabIntoView)
+// 可用 tab 集变化（如校管理员无班级时）→ 当前 tab 不在列则回落到第一个；列表渲染后也滚一次
 watch(tabs, (list) => {
   if (list.length && !list.some((t) => t.key === tab.value)) tab.value = list[0].key
+  scrollTabIntoView()
 }, { immediate: true })
 
 /* 班级设置 */
@@ -981,6 +993,22 @@ onMounted(() => {
 .manage-tabs {
   margin-bottom: 12px;
   flex-wrap: wrap;
+}
+/* 手机端：单行横向滑动，省纵向空间 */
+@media (max-width: 860px) {
+  .manage-tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    max-width: 100%;
+  }
+  .manage-tabs::-webkit-scrollbar {
+    display: none;
+  }
+  .manage-tabs button {
+    flex: none;
+    white-space: nowrap;
+  }
 }
 .manage-tabs button {
   display: inline-flex;

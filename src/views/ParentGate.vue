@@ -3,8 +3,10 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { get } from '@/api'
 
+const RELATIONS = ['爸爸', '妈妈', '爷爷', '奶奶', '外公', '外婆', '其他']
 const router = useRouter()
 const code = ref('')
+const rel = ref('妈妈')
 const error = ref('')
 const busy = ref(false)
 
@@ -17,7 +19,7 @@ async function enter() {
     const res = await get<{ key: string; class_name: string }>(
       `/api/parent-lookup-code?code=${encodeURIComponent(c)}`,
     )
-    await router.push(`/parent/${res.key}`)
+    await router.push(`/parent/${res.key}?rel=${encodeURIComponent(rel.value)}`)
   } catch (e: any) {
     error.value = e.message
   } finally {
@@ -67,6 +69,12 @@ async function enter() {
         <button class="gbtn primary" :disabled="busy || !/^\d{6}$/.test(code.trim())" @click="enter">
           {{ busy ? '查询中…' : '进入' }}
         </button>
+      </div>
+      <div class="rel-row">
+        <span class="rel-label">我的身份</span>
+        <select v-model="rel" class="gselect rel-sel">
+          <option v-for="r in RELATIONS" :key="r" :value="r">{{ r }}</option>
+        </select>
       </div>
       <p v-if="error" class="err">{{ error }}</p>
       <p class="foot-note">进入后输入孩子的学号即可绑定：查看 TA 的出勤、给老师留言。</p>
@@ -121,6 +129,21 @@ h1 {
 .code-row {
   display: flex;
   gap: 10px;
+}
+.rel-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.rel-label {
+  font-size: 13px;
+  color: var(--muted);
+  font-weight: 600;
+  flex: none;
+}
+.rel-sel {
+  flex: 1;
 }
 .code-input {
   flex: 1;

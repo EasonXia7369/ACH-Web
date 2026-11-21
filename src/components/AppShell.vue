@@ -681,19 +681,12 @@ onBeforeUnmount(() => chat.reset())
   .topbar {
     padding: 12px 16px 0;
   }
-  /* 窄屏顶栏收缩：长姓名截断，给图标按钮让位 */
+  /* 窄屏顶栏：账号信息藏进「关于」页，把空间还给班级名（长名不再截断） */
   .whoami {
-    font-size: 11.5px;
-    max-width: 40vw;
-    flex: none;
-  }
-  .whoami-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    display: none;
   }
   .content {
-    padding: 12px 16px calc(72px + env(safe-area-inset-bottom));
+    padding: 12px 16px calc(84px + env(safe-area-inset-bottom));
   }
 }
 .offline-overlay {

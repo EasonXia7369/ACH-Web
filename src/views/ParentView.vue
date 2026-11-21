@@ -73,9 +73,15 @@ watch(key, () => {
   bound.value = null
   bindNo.value = ''
   bindError.value = ''
-  const rel = localStorage.getItem(LS_REL + key.value)
-  if (rel && RELATIONS.includes(rel)) relation.value = rel
+  // 身份来源优先级：入口页 ?rel= > 本机记住 > 默认妈妈
+  const qRel = (route.query.rel as string) ?? ''
   const saved = localStorage.getItem(LS_BIND + key.value)
+  if (qRel && RELATIONS.includes(qRel)) relation.value = qRel
+  else {
+    const r = localStorage.getItem(LS_REL + key.value)
+    if (r && RELATIONS.includes(r)) relation.value = r
+    else relation.value = '妈妈'
+  }
   if (saved) {
     try {
       const b = JSON.parse(saved)
@@ -211,7 +217,7 @@ const weeklyTotals = computed(() => {
       </div>
       <h1>{{ data?.class_name ?? '' }}</h1>
       <p class="date-line" v-if="data">{{ data.day }}（{{ dayjs(data.day).format('dddd') }}）家长视图</p>
-      <p class="privacy-note">学生姓名已脱敏，仅班主任与家长可对应。本页可查看班级信息，也可给老师留言（与班级消息相互独立）。</p>
+      <p class="privacy-note">学生姓名已脱敏（仅显示姓氏和拼音首字母，仅班主任与家长可对应）。默认展示全班视图；输入学号绑定孩子后，出勤与汇总只看 TA 的。本页可给老师留言（与班级消息相互独立）。</p>
     </header>
 
     <div v-if="loading" class="state">加载中…</div>
@@ -222,10 +228,10 @@ const weeklyTotals = computed(() => {
       <section class="card msg-card">
         <h2>给老师留言</h2>
 
-        <!-- 未绑定：输学号绑定 -->
+        <!-- 未绑定：输学号 + 选身份 -->
         <div v-if="!bound" class="bind-box">
           <p class="hint" style="margin: 0 0 8px">
-            输入孩子的学号完成绑定——之后这里显示 TA 的出勤，留言也署名给 TA：
+            输入孩子的学号、选好你的身份完成绑定——之后这里显示 TA 的出勤，留言也署名给 TA：
           </p>
           <div class="compose-row">
             <input
@@ -235,6 +241,9 @@ const weeklyTotals = computed(() => {
               maxlength="32"
               @keyup.enter="bindByNo"
             />
+            <select v-model="relation" class="gselect bind-rel" @change="rememberIdentity">
+              <option v-for="r in RELATIONS" :key="r" :value="r">{{ r }}</option>
+            </select>
             <button class="send-btn" :disabled="bindBusy || !bindNo.trim()" @click="bindByNo">
               {{ bindBusy ? '查询中…' : '绑定' }}
             </button>
@@ -320,20 +329,21 @@ const weeklyTotals = computed(() => {
         <p v-else class="none">今天没有课程</p>
       </section>
 
-      <!-- 今日出勤（个人化：仅绑定的孩子） -->
+      <!-- 今日出勤：未绑定=全班脱敏；绑定=仅该孩子 -->
       <section class="card">
         <h2>今日出勤<span v-if="bound" class="bound-suffix"> · {{ bound.name }}</span></h2>
         <div v-if="data.attendance_today.length" class="att-list">
           <div v-for="(a, i) in data.attendance_today" :key="i" class="att-item" :class="STATUS[a.status]?.cls">
+            <span class="att-student">{{ a.student }}</span>
             <span>{{ SLOT_LABEL[a.slot] }}</span>
             <span>{{ STATUS[a.status]?.label }}</span>
             <span v-if="a.note" class="att-note">{{ a.note }}</span>
           </div>
         </div>
-        <p v-else class="none">{{ bound ? bound.name + ' 今天没有出勤记录（一切正常）' : '绑定孩子后查看 TA 的今日出勤' }}</p>
+        <p v-else class="none">{{ bound ? bound.name + ' 今天没有出勤记录（一切正常）' : '今天全班没有出勤记录（一切正常）' }}</p>
       </section>
 
-      <!-- 本周汇总（个人化） -->
+      <!-- 本周汇总：未绑定=全班每生（脱敏）；绑定=仅该孩子 -->
       <section class="card">
         <h2>本周汇总<span v-if="bound" class="bound-suffix"> · {{ bound.name }}</span></h2>
         <div v-if="weeklyTotals.leave + weeklyTotals.late + weeklyTotals.absent + weeklyTotals.violate > 0" class="week-grid">
@@ -342,7 +352,7 @@ const weeklyTotals = computed(() => {
           <div class="week-item"><b class="n-absent">{{ weeklyTotals.absent }}</b><span>旷课</span></div>
           <div class="week-item"><b class="n-violate">{{ weeklyTotals.violate }}</b><span>违纪</span></div>
         </div>
-        <p v-else class="none">{{ bound ? bound.name + ' 本周全勤' : '绑定孩子后查看 TA 的本周汇总' }}</p>
+        <p v-else class="none">{{ bound ? bound.name + ' 本周全勤' : '本周全班全勤' }}</p>
       </section>
 
       <footer class="foot">方舟班级中心 · Ark Class Hub</footer>
@@ -590,6 +600,12 @@ h2 {
 .bind-input {
   flex: 1;
   min-width: 0;
+}
+.bind-rel {
+  flex: none;
+  width: auto;
+  min-width: 84px;
+  padding: 8px 8px;
 }
 .bound-bar {
   display: flex;
